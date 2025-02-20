@@ -24,117 +24,132 @@ import utils.ptychosaxsNN_utils as ptNN_U
 import ptychosaxsNN.ptychosaxsNN as ptNN
 importlib.reload(ptNN_U)
 importlib.reload(ptNN)
-# #%%
-# # Define the Convolutional Autoencoder with Skip Connections
+#%%
+
 # class ConvAutoencoderSkip(nn.Module):
 #     def __init__(self, probe_kernel):
 #         super(ConvAutoencoderSkip, self).__init__()
 
-#         # Encoder
+#         # Reduce channel sizes
 #         self.enc1 = nn.Sequential(
-#             nn.Conv2d(1, 16, kernel_size=3, stride=1, padding=1),
+#             nn.Conv2d(1, 8, kernel_size=3, stride=1, padding=1),  # 16->8
+#             nn.ReLU(),
+#             nn.BatchNorm2d(8),
+#             nn.ReLU(),
+#             nn.Conv2d(8, 8, 3, stride=1, padding=(1,1)),
+#             nn.BatchNorm2d(8),
 #             nn.ReLU()
 #         )
 #         self.pool1 = nn.MaxPool2d(2, 2)
 
 #         self.enc2 = nn.Sequential(
-#             nn.Conv2d(16, 32, kernel_size=3, stride=1, padding=1),
+#             nn.Conv2d(8, 16, kernel_size=3, stride=1, padding=1),  # 32->16
+#             nn.ReLU(),
+#             nn.BatchNorm2d(16),
+#             nn.ReLU(),
+#             nn.Conv2d(16, 16, 3, stride=1, padding=(1,1)),
+#             nn.BatchNorm2d(16),
 #             nn.ReLU()
 #         )
 #         self.pool2 = nn.MaxPool2d(2, 2)
         
-        
 #         self.enc3 = nn.Sequential(
-#             nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),
+#             nn.Conv2d(16, 32, kernel_size=3, stride=1, padding=1),  # 64->32
+#             nn.ReLU(),
+#             nn.BatchNorm2d(32),
+#             nn.ReLU(),
+#             nn.Conv2d(32, 32, 3, stride=1, padding=(1,1)),
+#             nn.BatchNorm2d(32),
 #             nn.ReLU()
 #         )
 #         self.pool3 = nn.MaxPool2d(2, 2)
+        
+#         self.enc4 = nn.Sequential(
+#             nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),  # 128->64
+#             nn.ReLU(),
+#             nn.BatchNorm2d(64),
+#             nn.ReLU(),
+#             nn.Conv2d(64, 64, 3, stride=1, padding=(1,1)),
+#             nn.BatchNorm2d(64),
+#             nn.ReLU()
+#         )
+#         self.pool4 = nn.MaxPool2d(2, 2)
 
 #         # Bottleneck
 #         self.bottleneck = nn.Sequential(
-#             nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1),
+#             nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1),  # 256->128
+#             nn.ReLU(),
+#             nn.BatchNorm2d(128),
+#             nn.ReLU(),
+#             nn.Conv2d(128, 128, 3, stride=1, padding=(1,1)),
+#             nn.BatchNorm2d(128),
 #             nn.ReLU()
 #         )
         
-#         # Decoder with Skip Connections
+#         # Decoder with Skip Connections (reduced channels)
 #         self.up1 = nn.ConvTranspose2d(128, 64, kernel_size=2, stride=2, padding=0)
 #         self.dec1 = nn.Sequential(
 #             nn.Conv2d(128, 64, kernel_size=3, stride=1, padding=1),
+#             nn.ReLU(),
+#             nn.BatchNorm2d(64),
+#             nn.ReLU(),
+#             nn.Conv2d(64, 64, 3, stride=1, padding=(1,1)),
+#             nn.BatchNorm2d(64),
 #             nn.ReLU()
 #         )
 
-#         # Decoder with Skip Connections
 #         self.up2 = nn.ConvTranspose2d(64, 32, kernel_size=2, stride=2, padding=0)
 #         self.dec2 = nn.Sequential(
 #             nn.Conv2d(64, 32, kernel_size=3, stride=1, padding=1),
+#             nn.ReLU(),
+#             nn.BatchNorm2d(32),
+#             nn.ReLU(),
+#             nn.Conv2d(32, 32, 3, stride=1, padding=(1,1)),
+#             nn.BatchNorm2d(32),
 #             nn.ReLU()
 #         )
 
 #         self.up3 = nn.ConvTranspose2d(32, 16, kernel_size=2, stride=2, padding=0)
 #         self.dec3 = nn.Sequential(
 #             nn.Conv2d(32, 16, kernel_size=3, stride=1, padding=1),
+#             nn.ReLU(),
+#             nn.BatchNorm2d(16),
+#             nn.ReLU(),
+#             nn.Conv2d(16, 16, 3, stride=1, padding=(1,1)),
+#             nn.BatchNorm2d(16),
+#             nn.ReLU()
+#         )
+        
+#         self.up4 = nn.ConvTranspose2d(16, 8, kernel_size=2, stride=2, padding=0)
+#         self.dec4 = nn.Sequential(
+#             nn.Conv2d(16, 8, kernel_size=3, stride=1, padding=1),
+#             nn.ReLU(),
+#             nn.BatchNorm2d(8),
+#             nn.ReLU(),
+#             nn.Conv2d(8, 8, 3, stride=1, padding=(1,1)),
+#             nn.BatchNorm2d(8),
 #             nn.ReLU()
 #         )
 
-#         # Final reconstruction layer
-#         self.final_layer = nn.Conv2d(16, 1, kernel_size=3, stride=1, padding=1)
+
+#         # Modify final layer to encourage sharp peaks
+#         self.final_layer = nn.Sequential(
+#             nn.Conv2d(8, 1, kernel_size=3, stride=1, padding=1),
+#             nn.ReLU(),  # Keep non-negative
+#             # Remove softmax to allow for sharp peaks
+#         )
+#         # # Final reconstruction layer
+#         # self.final_layer = nn.Conv2d(8, 1, kernel_size=3, stride=1, padding=1)
+        
 #         self.sigmoid = nn.Sigmoid()
+#         self.drop = nn.Dropout(0.75)
 
-#         # Probe Convolution (Fixed Kernel)
+#         # Convert probe kernel to torch tensor
+#         probe_kernel = torch.from_numpy(probe_kernel).float()
+#         # Add batch and channel dimensions
+#         probe_kernel = probe_kernel.unsqueeze(0).unsqueeze(0)
+#         #print("Probe kernel shape:", probe_kernel.shape)  # Added print statement
 #         self.register_buffer("probe_kernel", probe_kernel)
-
-#     def forward(self, x):
-#         # Encoder
-#         enc1_out = self.enc1(x)
-#         enc1_pooled = self.pool1(enc1_out)
-
-#         enc2_out = self.enc2(enc1_pooled)
-#         enc2_pooled = self.pool2(enc2_out)
-
-#         enc3_out = self.enc3(enc2_pooled)
-#         enc3_pooled = self.pool3(enc3_out)
-
-#         # Bottleneck
-#         bottleneck_out = self.bottleneck(enc3_pooled)
-
-#         # Decoder with Skip Connections
-#         up1_out = self.up1(bottleneck_out)
-#         dec1_out = self.dec1(torch.cat([up1_out, enc3_out], dim=1))
-
-#         up2_out = self.up2(dec1_out)
-#         dec2_out = self.dec2(torch.cat([up2_out, enc2_out], dim=1))
-
-#         up3_out = self.up3(dec2_out)
-#         dec3_out = self.dec3(torch.cat([up3_out, enc1_out], dim=1))
-
-#         # Final output
-#         decoded = self.sigmoid(self.final_layer(dec3_out))
-
-#         # Apply probe convolution
-#         kernel_size = self.probe_kernel.shape[0]
-#         pad_size = kernel_size // 2  # Adjusted padding calculation
-        
-#         # Flip the kernel (to match scipy.convolve2d behavior)
-#         flipped_kernel = torch.flip(self.probe_kernel, [0, 1])
-        
-#         # Calculate total padding needed
-#         total_pad = kernel_size - 1
-#         left_pad = total_pad // 2
-#         right_pad = total_pad - left_pad
-        
-#         # Apply convolution with proper padding to maintain exact size
-#         probe_convolved_output = F.conv2d(F.pad(decoded, (left_pad, right_pad, left_pad, right_pad), mode='reflect'),flipped_kernel.unsqueeze(0).unsqueeze(0))
-        
-        
-#         probe_convolved_output = (probe_convolved_output - probe_convolved_output.min()) / (probe_convolved_output.max() - probe_convolved_output.min() + 1e-8)
-    
-#         # Verify shapes match
-#         assert probe_convolved_output.shape == decoded.shape, f"Shape mismatch: {probe_convolved_output.shape} vs {decoded.shape}"
-        
-#         return decoded, probe_convolved_output
-
-
-#%%
 
 class ConvAutoencoderSkip(nn.Module):
     def __init__(self, probe_kernel):
@@ -142,40 +157,7 @@ class ConvAutoencoderSkip(nn.Module):
 
         # Reduce channel sizes
         self.enc1 = nn.Sequential(
-            nn.Conv2d(1, 8, kernel_size=3, stride=1, padding=1),  # 16->8
-            nn.ReLU(),
-            nn.BatchNorm2d(8),
-            nn.ReLU(),
-            nn.Conv2d(8, 8, 3, stride=1, padding=(1,1)),
-            nn.BatchNorm2d(8),
-            nn.ReLU()
-        )
-        self.pool1 = nn.MaxPool2d(2, 2)
-
-        self.enc2 = nn.Sequential(
-            nn.Conv2d(8, 16, kernel_size=3, stride=1, padding=1),  # 32->16
-            nn.ReLU(),
-            nn.BatchNorm2d(16),
-            nn.ReLU(),
-            nn.Conv2d(16, 16, 3, stride=1, padding=(1,1)),
-            nn.BatchNorm2d(16),
-            nn.ReLU()
-        )
-        self.pool2 = nn.MaxPool2d(2, 2)
-        
-        self.enc3 = nn.Sequential(
-            nn.Conv2d(16, 32, kernel_size=3, stride=1, padding=1),  # 64->32
-            nn.ReLU(),
-            nn.BatchNorm2d(32),
-            nn.ReLU(),
-            nn.Conv2d(32, 32, 3, stride=1, padding=(1,1)),
-            nn.BatchNorm2d(32),
-            nn.ReLU()
-        )
-        self.pool3 = nn.MaxPool2d(2, 2)
-        
-        self.enc4 = nn.Sequential(
-            nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),  # 128->64
+            nn.Conv2d(1, 64, kernel_size=3, stride=1, padding=1),  # 16->8
             nn.ReLU(),
             nn.BatchNorm2d(64),
             nn.ReLU(),
@@ -183,11 +165,10 @@ class ConvAutoencoderSkip(nn.Module):
             nn.BatchNorm2d(64),
             nn.ReLU()
         )
-        self.pool4 = nn.MaxPool2d(2, 2)
+        self.pool1 = nn.MaxPool2d(2, 2)
 
-        # Bottleneck
-        self.bottleneck = nn.Sequential(
-            nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1),  # 256->128
+        self.enc2 = nn.Sequential(
+            nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1),  # 32->16
             nn.ReLU(),
             nn.BatchNorm2d(128),
             nn.ReLU(),
@@ -195,10 +176,57 @@ class ConvAutoencoderSkip(nn.Module):
             nn.BatchNorm2d(128),
             nn.ReLU()
         )
+        self.pool2 = nn.MaxPool2d(2, 2)
         
+        
+        self.enc3 = nn.Sequential(
+            nn.Conv2d(128, 256, kernel_size=3, stride=1, padding=1),  # 32->16
+            nn.ReLU(),
+            nn.BatchNorm2d(256),
+            nn.ReLU(),
+            nn.Conv2d(256, 256, 3, stride=1, padding=(1,1)),
+            nn.BatchNorm2d(256),
+            nn.ReLU()
+        )
+        self.pool3 = nn.MaxPool2d(2, 2)
+        
+        
+        # Bottleneck
+        self.bottleneck = nn.Sequential(
+            nn.Conv2d(256, 512, kernel_size=3, stride=1, padding=1),  # 256->128
+            nn.ReLU(),
+            nn.BatchNorm2d(512),
+            nn.ReLU(),
+            nn.Conv2d(512, 512, 3, stride=1, padding=(1,1)),
+            nn.BatchNorm2d(512),
+            nn.ReLU()
+        )
+
         # Decoder with Skip Connections (reduced channels)
-        self.up1 = nn.ConvTranspose2d(128, 64, kernel_size=2, stride=2, padding=0)
+        self.up1 = nn.ConvTranspose2d(512, 256, kernel_size=2, stride=2, padding=0)
         self.dec1 = nn.Sequential(
+            nn.Conv2d(512, 256, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(),
+            nn.BatchNorm2d(256),
+            nn.ReLU(),
+            nn.Conv2d(256, 256, 3, stride=1, padding=(1,1)),
+            nn.BatchNorm2d(256),
+            nn.ReLU()
+        )
+
+        self.up2 = nn.ConvTranspose2d(256, 128, kernel_size=2, stride=2, padding=0)
+        self.dec2 = nn.Sequential(
+            nn.Conv2d(256, 128, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(),
+            nn.BatchNorm2d(128),
+            nn.ReLU(),
+            nn.Conv2d(128, 128, 3, stride=1, padding=(1,1)),
+            nn.BatchNorm2d(128),
+            nn.ReLU()
+        )
+    
+        self.up3 = nn.ConvTranspose2d(128, 64, kernel_size=2, stride=2, padding=0)
+        self.dec3 = nn.Sequential(
             nn.Conv2d(128, 64, kernel_size=3, stride=1, padding=1),
             nn.ReLU(),
             nn.BatchNorm2d(64),
@@ -208,63 +236,153 @@ class ConvAutoencoderSkip(nn.Module):
             nn.ReLU()
         )
 
-        self.up2 = nn.ConvTranspose2d(64, 32, kernel_size=2, stride=2, padding=0)
-        self.dec2 = nn.Sequential(
-            nn.Conv2d(64, 32, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(),
-            nn.BatchNorm2d(32),
-            nn.ReLU(),
-            nn.Conv2d(32, 32, 3, stride=1, padding=(1,1)),
-            nn.BatchNorm2d(32),
-            nn.ReLU()
+        # Modify final layer to encourage sharp peaks
+        self.final_layer = nn.Sequential(
+            nn.Conv2d(64, 1, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(),  # Keep non-negative
+            # Remove softmax to allow for sharp peaks
         )
-
-        self.up3 = nn.ConvTranspose2d(32, 16, kernel_size=2, stride=2, padding=0)
-        self.dec3 = nn.Sequential(
-            nn.Conv2d(32, 16, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(),
-            nn.BatchNorm2d(16),
-            nn.ReLU(),
-            nn.Conv2d(16, 16, 3, stride=1, padding=(1,1)),
-            nn.BatchNorm2d(16),
-            nn.ReLU()
-        )
+        # # Final reconstruction layer
+        # self.final_layer = nn.Conv2d(8, 1, kernel_size=3, stride=1, padding=1)
         
-        self.up4 = nn.ConvTranspose2d(16, 8, kernel_size=2, stride=2, padding=0)
-        self.dec4 = nn.Sequential(
-            nn.Conv2d(16, 8, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(),
-            nn.BatchNorm2d(8),
-            nn.ReLU(),
-            nn.Conv2d(8, 8, 3, stride=1, padding=(1,1)),
-            nn.BatchNorm2d(8),
-            nn.ReLU()
-        )
-
-        # Final reconstruction layer
-        self.final_layer = nn.Conv2d(8, 1, kernel_size=3, stride=1, padding=1)
         self.sigmoid = nn.Sigmoid()
+        self.drop = nn.Dropout(0.75)
 
-        # Probe FFT optimization
+        # Convert probe kernel to torch tensor
+        probe_kernel = torch.from_numpy(probe_kernel).float()
+        # Add batch and channel dimensions
+        probe_kernel = probe_kernel.unsqueeze(0).unsqueeze(0)
+        #print("Probe kernel shape:", probe_kernel.shape)  # Added print statement
         self.register_buffer("probe_kernel", probe_kernel)
-        # Get kernel size before padding
-        self.kernel_size = probe_kernel.shape[0]
-        # Center and pad kernel to match input size
-        padded_kernel = F.pad(probe_kernel.unsqueeze(0).unsqueeze(0), 
-                            (0, 256 - self.kernel_size, 0, 256 - self.kernel_size))
-        # Apply FFT shift before computing FFT
-        padded_kernel = torch.fft.fftshift(padded_kernel)
-        kernel_fft = torch.fft.rfft2(padded_kernel)
-        self.register_buffer("kernel_fft", kernel_fft)
 
+
+
+
+    def fft_conv2d(self, x):
+        # Performing convolution
+        
+        # Compute FFT of decoded image
+        x_fft = torch.fft.ifft2(x)
+        
+        # 1. Multiply probe and object in real space
+        real_space_product = x_fft * self.probe_kernel
+        
+        # 2. Take FFT of product to get diffraction pattern
+        output_fft = torch.fft.fft2(real_space_product)
+        
+        # 3. Take magnitude squared to get intensity
+        output = torch.abs(output_fft)**2
+        
+        # Normalize output (prevent division by zero)
+        output = output / (torch.max(output) + 1e-8)
+        
+        # Verify output size
+        assert output.size() == x.size(), f"Output size {output.size()} doesn't match input size {x.size()}"
+        
+        return output
+
+
+    def forward(self, x):
+        # Encoder
+        enc1_out = self.enc1(x)
+        enc1_pooled = self.drop(self.pool1(enc1_out))
+
+        enc2_out = self.enc2(enc1_pooled)
+        enc2_pooled = self.drop(self.pool2(enc2_out))
+
+        enc3_out = self.enc3(enc2_pooled)
+        enc3_pooled = self.drop(self.pool3(enc3_out))
+
+        # Bottleneck
+        bottleneck_out = self.bottleneck(enc3_pooled)
+
+        # Decoder with Skip Connections
+        up1_out = self.up1(bottleneck_out)
+        dec1_out = self.dec1(torch.cat([up1_out, enc3_out], dim=1))
+
+        up2_out = self.up2(dec1_out)
+        dec2_out = self.dec2(torch.cat([up2_out, enc2_out], dim=1)) 
+
+        up3_out = self.up3(dec2_out)
+        dec3_out = self.dec3(torch.cat([up3_out, enc1_out], dim=1))
+        # Final output
+        decoded = self.sigmoid(self.final_layer(dec3_out))
+        #decoded = self.final_layer(dec4_out)
+        #print("Decoded shape:", decoded.shape)  # Added print statement
+
+        # Use FFT-based convolution instead of spatial convolution
+        probe_convolved_output = self.fft_conv2d(decoded)
+        
+        return decoded, probe_convolved_output
+
+
+
+
+
+
+
+#%%
+
+
+class recon_model(nn.Module):
+    def __init__(self,probe_kernel):
+        super(recon_model, self).__init__()
+
+        def conv_block(in_channels, out_channels):
+            block = nn.Sequential(
+                nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=(1,1)),
+                nn.BatchNorm2d(out_channels),
+                nn.ReLU(),
+                nn.Conv2d(out_channels, out_channels, 3, stride=1, padding=(1,1)),
+                nn.BatchNorm2d(out_channels),
+                nn.ReLU(),
+            )
+            return block
+    
+            
+        def up_conv(in_channels, out_channels):
+            return nn.ConvTranspose2d(in_channels, out_channels, kernel_size=2, stride=2)
+
+            
+        def conv_last(in_channels,out_channels):
+            block = nn.Sequential(
+                nn.Conv2d(in_channels,out_channels, 3, stride=1, padding=(1,1)),
+                nn.Sigmoid()
+            )
+            return block
+        
+        nconv=64
+        #convoluted diffraction pattern encoder
+        self.encoder1 = conv_block(1,nconv)
+        self.encoder2 = conv_block(nconv,nconv*2)
+        self.encoder3 = conv_block(nconv*2,nconv*4)
+        self.encoder4 = conv_block(nconv*4,nconv*4*2)
+
+        self.pool = nn.MaxPool2d((2,2))
+        self.drop = nn.Dropout(0.5)
+
+        self.bottleneck = conv_block(nconv*4*2, nconv*4*2)
+        
+        #convoluted diffraction pattern decoder blocks
+        self.decoder4=conv_block(nconv*4*2*2,nconv*4*2)
+        self.decoder3=conv_block(nconv*4*2,nconv*4)
+        self.decoder2=conv_block(nconv*4,nconv*2)
+        self.decoder1=conv_block(nconv*2,nconv)
+        
+
+        self.up_conv4=up_conv(512,256)
+        self.up_conv3=up_conv(256,128)
+        self.up_conv2=up_conv(128,64)
+        self.conv_last=conv_last(64,1)
+        
     def fft_conv2d(self, x):
         # Center input before FFT
         x_centered = torch.fft.fftshift(x)
         # Compute FFT of input
-        x_fft = torch.fft.rfft2(x_centered)
+        x_fft = torch.fft.rfft2(x_centered)        
         
         # Multiply in frequency domain (element-wise)
-        output_fft = x_fft * self.kernel_fft
+        output_fft = x_fft * probe_kernel
         
         # Inverse FFT and shift back
         output = torch.fft.irfft2(output_fft)
@@ -276,50 +394,48 @@ class ConvAutoencoderSkip(nn.Module):
         output = (output - batch_min) / (batch_max - batch_min + 1e-8)
         
         return output
-
-    def forward(self, x):
-        # Encoder
-        enc1_out = self.enc1(x)
-        enc1_pooled = self.pool1(enc1_out)
-
-        enc2_out = self.enc2(enc1_pooled)
-        enc2_pooled = self.pool2(enc2_out)
-
-        enc3_out = self.enc3(enc2_pooled)
-        enc3_pooled = self.pool3(enc3_out)
+    def forward(self,x):#,p):
+        x1 = self.encoder1(x)
+        x2 = self.encoder2(self.drop(self.pool(x1)))
+        x3 = self.encoder3(self.drop(self.pool(x2)))
+        x4 = self.encoder4(self.drop(self.pool(x3)))
         
-        enc4_out = self.enc4(enc3_pooled)
-        enc4_pooled = self.pool4(enc4_out)
+        b = self.bottleneck(self.drop(self.pool(x4)))
 
-        # Bottleneck
-        bottleneck_out = self.bottleneck(enc4_pooled)
+        d4 = self.up_conv4(b)
+        d4 = torch.cat((d4, x4), dim=1)
+        d4 = self.decoder4(d4)
+        
+        d3 = self.up_conv3(d4)
+        d3 = torch.cat((d3, x3), dim=1)
+        d3 = self.decoder3(d3)
 
-        # Decoder with Skip Connections
-        up1_out = self.up1(bottleneck_out)
-        dec1_out = self.dec1(torch.cat([up1_out, enc4_out], dim=1))
+        d2 = self.up_conv2(d3)
+        d2 = torch.cat((d2, x2), dim=1)
+        d2 = self.decoder2(d2)
 
-        up2_out = self.up2(dec1_out)
-        dec2_out = self.dec2(torch.cat([up2_out, enc3_out], dim=1))
+        # d1 = self.up_conv1(d2)
+        # d1 = torch.cat((d1, x1), dim=1)
+        # d1 = self.decoder1(d1)
 
-        up3_out = self.up3(dec2_out)
-        dec3_out = self.dec3(torch.cat([up3_out, enc2_out], dim=1))
-
-        up4_out = self.up4(dec3_out)
-        dec4_out = self.dec4(torch.cat([up4_out, enc1_out], dim=1))
-
-        # Final output
-        decoded = self.sigmoid(self.final_layer(dec4_out))
-
+        d0 = self.conv_last(d2)
+        
+        out=d0
+        
         # Use FFT-based convolution instead of spatial convolution
-        probe_convolved_output = self.fft_conv2d(decoded)
+        probe_convolved_output = self.fft_conv2d(out)
         
-        return decoded, probe_convolved_output
+        return out, probe_convolved_output
+
+
 
 
 
 #%%
 #Zhihua probe
-probe=loadmat("/net/micdata/data2/12IDC/2024_Dec/results/JM02_3D_/fly482/roi2_Ndp1024/MLc_L1_p10_gInf_Ndp256_mom0.5_pc100_noModelCon_bg0.1_vi_mm/MLc_L1_p10_g400_Ndp512_mom0.5_pc400_noModelCon_bg0.1_vp4_vi_mm/Niter1000.mat")['probe'].T[0][0].T
+#probe=loadmat("/net/micdata/data2/12IDC/2024_Dec/results/JM02_3D_/fly482/roi2_Ndp1024/MLc_L1_p10_gInf_Ndp256_mom0.5_pc100_noModelCon_bg0.1_vi_mm/MLc_L1_p10_g400_Ndp512_mom0.5_pc400_noModelCon_bg0.1_vp4_vi_mm/Niter1000.mat")['probe'].T[0][0].T
+probe=loadmat("/net/micdata/data2/12IDC/2024_Dec/results/JM02_3D_/fly585/roi0_Ndp512/MLc_L1_p10_g1000_Ndp256_mom0.5_pc200_model_scale_rotation_shear_asymmetry_noModelCon_bg0.1_vi_mm/MLc_L1_p10_g100_Ndp512_mom0.5_pc200_model_scale_asymmetry_rotation_shear_maxPosError200nm_noModelCon_bg0.1_vi_mm/Niter600.mat")['probe'].T[0].T
+
 print(probe.shape)
 plt.imshow(np.abs(probe))
 plt.colorbar()
@@ -329,30 +445,32 @@ dpsize=512
 # plt.imshow(probe)
 # plt.colorbar()
 # plt.show()
-probe=np.asarray(np.fft.fftshift(np.fft.fft2(probe)))
-plt.imshow(np.abs(probe))
+plt.imshow(np.abs(np.asarray(np.fft.fftshift(np.fft.fft2(probe)))),norm=colors.LogNorm())
 plt.colorbar()
 plt.show()
-endsize=256
+
+#%%
+endsize=512
+#%%
 # Separate resize for real and imaginary components
-probe_real = resize(np.real(probe), (endsize,endsize), preserve_range=True, anti_aliasing=True)
-probe_imag = resize(np.imag(probe), (endsize,endsize), preserve_range=True, anti_aliasing=True)
-# Recombine into complex array
-probe = probe_real + 1j * probe_imag
-# Verify the resize maintained complex structure
-plt.figure(figsize=(12,4))
-plt.subplot(131)
-plt.imshow(np.abs(probe))
-plt.title('Magnitude')
-plt.colorbar()
-plt.subplot(132)
-plt.imshow(np.angle(probe))
-plt.title('Phase')
-plt.colorbar()
+# probe_real = resize(np.real(probe), (endsize,endsize), preserve_range=True, anti_aliasing=True)
+# probe_imag = resize(np.imag(probe), (endsize,endsize), preserve_range=True, anti_aliasing=True)
+# # Recombine into complex array
+# probe = probe_real + 1j * probe_imag
+# # Verify the resize maintained complex structure
+# plt.figure(figsize=(12,4))
+# plt.subplot(131)
+# plt.imshow(np.abs(probe))
+# plt.title('Magnitude')
+# plt.colorbar()
+# plt.subplot(132)
+# plt.imshow(np.angle(probe))
+# plt.title('Phase')
+# plt.colorbar()
 
 #%%
 all_dps=[]
-for scan in np.arange(578,581):
+for scan in np.arange(578,585):
     dps = ptNN_U.load_h5_scan_to_npy(Path(f'/net/micdata/data2/12IDC/2024_Dec/ptycho/'),scan,plot=False)
     all_dps.append(dps)
 temp_dps=np.asarray(all_dps)
@@ -378,27 +496,57 @@ print('shuffling diffraction patterns')
 conv_DPs_shuff = conv_DPs[indices]
 print('log10')
 amp_conv = ptNN_U.log10_custom(conv_DPs_shuff)
+
+#%%
 print('resizing')
 amp_conv_red=np.asarray([resize(d[center[0]-256:center[0]+256,center[1]-256:center[1]+256],(endsize,endsize),preserve_range=True,anti_aliasing=True) for d in tqdm(amp_conv)])
 print('normalizing')
 amp_conv_red=np.asarray([(a-np.min(a))/(np.max(a)-np.min(a)) for a in tqdm(amp_conv_red)])
 
+#%%
+def create_center_mask(shape, center_radius=40):
+    """Create a mask that excludes the central beam region"""
+    y, x = np.ogrid[:shape[0], :shape[1]]
+    center_y, center_x = shape[0]//2, shape[1]//2
+    
+    # Distance from center for each pixel
+    dist_from_center = np.sqrt((x - center_x)**2 + (y - center_y)**2)
+    
+    # Create mask (True for pixels we want to keep)
+    mask = dist_from_center > center_radius
+    return mask
+
+
+amp_conv_red_filtered=[]
+mask=create_center_mask((endsize,endsize),center_radius=endsize//7)
+for dp in amp_conv_red:
+    sum = np.sum(dp*mask)
+    if sum>10000:
+        amp_conv_red_filtered.append(dp)
+    else:
+        continue
+print(f"{len(amp_conv_red_filtered)} total diffraction patterns after filtering")
 
 #%%
-plt.imshow(amp_conv_red[620],norm=colors.LogNorm())
+plt.imshow(amp_conv_red_filtered[random.randint(0,len(amp_conv_red_filtered)-1)]*mask)
 plt.colorbar()
 plt.show()
+#%%
+amp_conv_red=np.asarray(amp_conv_red_filtered)
+    
+    
+
 
 #%%
-NTEST = conv_DPs.shape[0]//4
-NTRAIN = conv_DPs.shape[0]-NTEST
+NTEST = amp_conv_red.shape[0]//4
+NTRAIN = amp_conv_red.shape[0]-NTEST
 NVALID = NTEST//2 # NTRAIN//
 
 print(NTRAIN,NTEST,NVALID)
 
-EPOCHS = 256
+EPOCHS = 64
 NGPUS = torch.cuda.device_count()
-BATCH_SIZE = NGPUS*16#8
+BATCH_SIZE = NGPUS*16#*8
 LR = NGPUS * 1e-3
 print("GPUs:", NGPUS, "Batch size:", BATCH_SIZE, "Learning rate:", LR)
 
@@ -473,14 +621,35 @@ testloader = DataLoader(test_dataV, batch_size=BATCH_SIZE, shuffle=False, num_wo
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #%%
 # Create a fixed probe kernel (e.g., an edge detection filter)
-probe_kernel = torch.tensor(probe, 
-    dtype=torch.float32
-)  # Shape: (out_channels, in_channels, kernel_height, kernel_width)
-
+#probe_kernel = torch.tensor(probe, 
+#    dtype=torch.float32
+#)  # Shape: (out_channels, in_channels, kernel_height, kernel_width)
+probe_kernel=probe
 # Initialize the model
 model = ConvAutoencoderSkip(probe_kernel)
+#model=recon_model(probe_kernel)
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -532,22 +701,136 @@ def pearson_loss(output, target):
     return loss
 
 # Modify the custom loss function to handle the scale difference
-def custom_loss(output, target):
-    # # Spatial domain loss
-    # mse_loss = F.mse_loss(output, target)
-    # # Frequency domain loss
-    # #output_fft = torch.fft.rfft2(output)
-    # #target_fft = torch.fft.rfft2(target)
-    # #fft_loss = F.mse_loss(torch.abs(output_fft), torch.abs(target_fft))
-    
-    # # Combine losses
-    # total_loss = mse_loss# + 0.1 * fft_loss
-    
+def custom_loss(output, target,decoded):
     total_loss = pearson_loss(output, target)
     return total_loss
 
+
+def custom_loss2(output, target, decoded):
+    # Main correlation loss between convolved output and target
+    conv_loss = pearson_loss(output, target)
+    
+    # Encourage sparsity (sharp peaks) in decoded image
+    # Using a modified L1 loss that's less harsh on peaks
+    peak_loss = torch.mean(torch.where(
+        decoded > 0.1,  # For values above threshold
+        0.1 * torch.abs(decoded),  # Small penalty for peaks
+        torch.abs(decoded)  # Larger penalty for non-peak areas
+    ))
+    
+    # Encourage local maxima to be sharp
+    # Calculate local max in 3x3 neighborhoods
+    max_pool = nn.MaxPool2d(kernel_size=3, stride=1, padding=1)
+    is_local_max = (decoded == max_pool(decoded))
+    sharpness_loss = torch.mean(torch.where(
+        is_local_max,
+        -decoded,  # Encourage higher values at peaks
+        torch.zeros_like(decoded)
+    ))
+    
+    # Combine losses
+    plc=1
+    slc=plc/2
+    total_loss = conv_loss + plc*peak_loss + slc*sharpness_loss
+    #total_loss = peak_loss + sharpness_loss
+    
+    return total_loss
+
+def custom_loss3(output, target, decoded):    
+    # Add small epsilon to prevent numerical instability
+    eps = 1e-6
+    
+    # # Create central beam mask
+    # h, w = output.shape[2:]
+    # y, x = torch.meshgrid(torch.arange(h, device=output.device), 
+    #                      torch.arange(w, device=output.device))
+    # center_y, center_x = h // 2, w // 2
+    # r = torch.sqrt((x - center_x)**2 + (y - center_y)**2)
+    
+    # # Create mask that de-emphasizes central beam (radius can be adjusted)
+    # central_beam_radius = 32  # adjust this based on your beam size
+    # beam_mask = (r > central_beam_radius).float()
+    # beam_mask = beam_mask.to(output.device)[None, None, :, :]
+    
+    # # Apply mask to correlation loss
+    # conv_loss = pearson_loss(output * beam_mask, target * beam_mask)
+    
+    # Main correlation loss between convolved output and target
+    conv_loss = pearson_loss(output, target)
+    
+    # Add small epsilon to prevent numerical instability
+    eps = 1e-6
+    
+    # Center distance map for radial weighting
+    h, w = decoded.shape[2:]
+    y, x = torch.meshgrid(torch.arange(h, device=decoded.device), 
+                         torch.arange(w, device=decoded.device))
+    center_y, center_x = h // 2, w // 2
+    r = torch.sqrt((x - center_x)**2 + (y - center_y)**2 + eps)
+    
+    
+    
+    # 1. Encourage centro-symmetry in decoded image
+    flipped = torch.flip(decoded, [-2, -1])
+    symmetry_loss = F.mse_loss(decoded, flipped)
+    
+    # 2. Higher-q peaks should be weaker (with numerical stability)
+    radial_weight = torch.exp(-r / (h/4))
+    radial_loss = torch.mean(decoded * (1 - radial_weight)[None, None, :, :])
+    
+    # 3. Peaks should be sharp
+    # Use Sobel filters for gradient calculation
+    sobel_x = torch.tensor([[-1, 0, 1], 
+                           [-2, 0, 2], 
+                           [-1, 0, 1]], 
+                           device=decoded.device,
+                           dtype=decoded.dtype).view(1, 1, 3, 3)
+    
+    sobel_y = torch.tensor([[-1, -2, -1], 
+                           [0, 0, 0], 
+                           [1, 2, 1]], 
+                           device=decoded.device,
+                           dtype=decoded.dtype).view(1, 1, 3, 3)
+    
+    # Calculate gradients using convolution
+    pad = nn.ReplicationPad2d(1)
+    decoded_pad = pad(decoded)
+    dx = F.conv2d(decoded_pad, sobel_x)
+    dy = F.conv2d(decoded_pad, sobel_y)
+    
+    # Detect peaks (with numerical stability)
+    max_pool = nn.MaxPool2d(kernel_size=3, stride=1, padding=1)
+    is_peak = (torch.abs(decoded - max_pool(decoded)) < eps)
+    
+    # Encourage high gradients at peaks (with numerical stability)
+    gradient_magnitude = torch.sqrt(dx**2 + dy**2 + eps)
+    sharpness_loss = -torch.mean(gradient_magnitude * is_peak.float())
+    
+    # 4. Background should be close to zero
+    background_mask = ~is_peak
+    background_loss = torch.mean(torch.abs(decoded * background_mask.float() + eps))
+    
+    # Clip losses to prevent extreme values
+    conv_loss = torch.clamp(conv_loss, -100, 100)
+    symmetry_loss = torch.clamp(symmetry_loss, -100, 100)
+    radial_loss = torch.clamp(radial_loss, -100, 100)
+    sharpness_loss = torch.clamp(sharpness_loss, -100, 100)
+    background_loss = torch.clamp(background_loss, -100, 100)
+    
+    # Combine losses with smaller weights to start
+    c=3
+    total_loss = (conv_loss + 
+                  0.05*c * symmetry_loss +
+                  0.02*c * radial_loss +
+                  0.05*c * sharpness_loss +
+                  0.1*c * background_loss)
+    
+    return total_loss
+
+
+
 # Update optimizer parameters
-optimizer = torch.optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-6)  # Lower learning rate
+optimizer = torch.optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-4)  # Lower learning rate
 scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=LR/10, max_lr=LR, step_size_up=step_size,
                                               cycle_momentum=False, mode='triangular2')
 # Print model summary
@@ -566,43 +849,44 @@ def train(trainloader, metrics):
         
         optimizer.zero_grad()
          
-        loss = custom_loss(probe_convolved, ft_images)
+        loss = custom_loss(probe_convolved, ft_images,decoded)
         
         loss.backward()
         optimizer.step()
 
         tot_loss += loss.detach().item()
-        
-        # Plot a random sample from the first batch of each epoch
-        if i == 0:
-            # Select random index from batch
-            rand_idx = random.randint(0, ft_images.shape[0]-1)
-            
-            # Create figure with 4 subplots
-            fig, (ax1, ax2, ax3, ax4) = plt.subplots(1, 4, figsize=(15, 5))
-            
-            # Plot input image
-            im1 = ax1.imshow(ft_images[rand_idx, 0].cpu().detach().numpy())
-            ax1.set_title('Input Image')
-            plt.colorbar(im1, ax=ax1)
-            
-            # Plot decoded image
-            im2 = ax2.imshow(decoded[rand_idx, 0].cpu().detach().numpy())
-            ax2.set_title('Decoded Image')
-            plt.colorbar(im2, ax=ax2)
-            
-            # Plot probe convolved image
-            im3 = ax3.imshow(probe_convolved[rand_idx, 0].cpu().detach().numpy())
-            ax3.set_title('Probe Convolved')
-            plt.colorbar(im3, ax=ax3)
-            
-            im4 = ax4.imshow(ft_images[rand_idx, 0].cpu().detach().numpy()-probe_convolved[rand_idx, 0].cpu().detach().numpy())
-            ax4.set_title('Difference')
-            plt.colorbar(im4, ax=ax4)
-            
-            plt.tight_layout()
-            plt.show()
+        plot_random=True
+        if plot_random:
+            # Plot a random sample from the first batch of each epoch
+            if i == 0:
+                # Select random index from batch
+                rand_idx = random.randint(0, ft_images.shape[0]-1)
                 
+                # Create figure with 4 subplots
+                fig, (ax1, ax2, ax3, ax4) = plt.subplots(1, 4, figsize=(15, 5))
+                
+                # Plot input image
+                im1 = ax1.imshow(ft_images[rand_idx, 0].cpu().detach().numpy())
+                ax1.set_title('Input Image')
+                plt.colorbar(im1, ax=ax1)
+                
+                # Plot decoded image
+                im2 = ax2.imshow(decoded[rand_idx, 0].cpu().detach().numpy())
+                ax2.set_title('Decoded Image')
+                plt.colorbar(im2, ax=ax2)
+                
+                # Plot probe convolved image
+                im3 = ax3.imshow(probe_convolved[rand_idx, 0].cpu().detach().numpy())
+                ax3.set_title('Probe Convolved')
+                plt.colorbar(im3, ax=ax3)
+                
+                im4 = ax4.imshow(ft_images[rand_idx, 0].cpu().detach().numpy()-probe_convolved[rand_idx, 0].cpu().detach().numpy())
+                ax4.set_title('Difference')
+                plt.colorbar(im4, ax=ax4)
+                
+                plt.tight_layout()
+                plt.show()
+                    
         scheduler.step()
         metrics['lrs'].append(scheduler.get_last_lr())
         
@@ -614,7 +898,7 @@ def validate(validloader, metrics):
         ft_images = ft_images[0].to(device)
         decoded, probe_convolved = model(ft_images)
          
-        val_loss = custom_loss(probe_convolved, ft_images)
+        val_loss = custom_loss(probe_convolved, ft_images,decoded)
     
         tot_val_loss += val_loss.detach().item()
     metrics['val_losses'].append([tot_val_loss/j])
@@ -670,13 +954,12 @@ plt.show()
 
 #%%
 model.eval()
-#model_new.eval() #imp when have dropout etc
 results = []
 for i, test in enumerate(testloader):
     tests = test[0].to(device)
-    result = model(tests)
+    result_d,result_pc = model(tests)
     for j in range(tests.shape[0]):
-        results.append(result[0][j].detach().to("cpu").numpy())
+        results.append(result_d[j].detach().to("cpu").numpy())
         
 results = np.array(results).squeeze()
 
@@ -687,7 +970,7 @@ plt.figure()
 n = 5
 f,ax=plt.subplots(3,n,figsize=(15, 12))
 plt.gcf().text(0.02, 0.8, "Input", fontsize=20)
-plt.gcf().text(0.02, 0.6, "True I", fontsize=20)
+plt.gcf().text(0.02, 0.5, "Output", fontsize=20)
 plt.gcf().text(0.02, 0.2, "Difference I", fontsize=20)
 
 for i in range(0,n):
