@@ -26,138 +26,13 @@ importlib.reload(ptNN_U)
 importlib.reload(ptNN)
 #%%
 
-# class ConvAutoencoderSkip(nn.Module):
-#     def __init__(self, probe_kernel):
-#         super(ConvAutoencoderSkip, self).__init__()
-
-#         # Reduce channel sizes
-#         self.enc1 = nn.Sequential(
-#             nn.Conv2d(1, 8, kernel_size=3, stride=1, padding=1),  # 16->8
-#             nn.ReLU(),
-#             nn.BatchNorm2d(8),
-#             nn.ReLU(),
-#             nn.Conv2d(8, 8, 3, stride=1, padding=(1,1)),
-#             nn.BatchNorm2d(8),
-#             nn.ReLU()
-#         )
-#         self.pool1 = nn.MaxPool2d(2, 2)
-
-#         self.enc2 = nn.Sequential(
-#             nn.Conv2d(8, 16, kernel_size=3, stride=1, padding=1),  # 32->16
-#             nn.ReLU(),
-#             nn.BatchNorm2d(16),
-#             nn.ReLU(),
-#             nn.Conv2d(16, 16, 3, stride=1, padding=(1,1)),
-#             nn.BatchNorm2d(16),
-#             nn.ReLU()
-#         )
-#         self.pool2 = nn.MaxPool2d(2, 2)
-        
-#         self.enc3 = nn.Sequential(
-#             nn.Conv2d(16, 32, kernel_size=3, stride=1, padding=1),  # 64->32
-#             nn.ReLU(),
-#             nn.BatchNorm2d(32),
-#             nn.ReLU(),
-#             nn.Conv2d(32, 32, 3, stride=1, padding=(1,1)),
-#             nn.BatchNorm2d(32),
-#             nn.ReLU()
-#         )
-#         self.pool3 = nn.MaxPool2d(2, 2)
-        
-#         self.enc4 = nn.Sequential(
-#             nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),  # 128->64
-#             nn.ReLU(),
-#             nn.BatchNorm2d(64),
-#             nn.ReLU(),
-#             nn.Conv2d(64, 64, 3, stride=1, padding=(1,1)),
-#             nn.BatchNorm2d(64),
-#             nn.ReLU()
-#         )
-#         self.pool4 = nn.MaxPool2d(2, 2)
-
-#         # Bottleneck
-#         self.bottleneck = nn.Sequential(
-#             nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1),  # 256->128
-#             nn.ReLU(),
-#             nn.BatchNorm2d(128),
-#             nn.ReLU(),
-#             nn.Conv2d(128, 128, 3, stride=1, padding=(1,1)),
-#             nn.BatchNorm2d(128),
-#             nn.ReLU()
-#         )
-        
-#         # Decoder with Skip Connections (reduced channels)
-#         self.up1 = nn.ConvTranspose2d(128, 64, kernel_size=2, stride=2, padding=0)
-#         self.dec1 = nn.Sequential(
-#             nn.Conv2d(128, 64, kernel_size=3, stride=1, padding=1),
-#             nn.ReLU(),
-#             nn.BatchNorm2d(64),
-#             nn.ReLU(),
-#             nn.Conv2d(64, 64, 3, stride=1, padding=(1,1)),
-#             nn.BatchNorm2d(64),
-#             nn.ReLU()
-#         )
-
-#         self.up2 = nn.ConvTranspose2d(64, 32, kernel_size=2, stride=2, padding=0)
-#         self.dec2 = nn.Sequential(
-#             nn.Conv2d(64, 32, kernel_size=3, stride=1, padding=1),
-#             nn.ReLU(),
-#             nn.BatchNorm2d(32),
-#             nn.ReLU(),
-#             nn.Conv2d(32, 32, 3, stride=1, padding=(1,1)),
-#             nn.BatchNorm2d(32),
-#             nn.ReLU()
-#         )
-
-#         self.up3 = nn.ConvTranspose2d(32, 16, kernel_size=2, stride=2, padding=0)
-#         self.dec3 = nn.Sequential(
-#             nn.Conv2d(32, 16, kernel_size=3, stride=1, padding=1),
-#             nn.ReLU(),
-#             nn.BatchNorm2d(16),
-#             nn.ReLU(),
-#             nn.Conv2d(16, 16, 3, stride=1, padding=(1,1)),
-#             nn.BatchNorm2d(16),
-#             nn.ReLU()
-#         )
-        
-#         self.up4 = nn.ConvTranspose2d(16, 8, kernel_size=2, stride=2, padding=0)
-#         self.dec4 = nn.Sequential(
-#             nn.Conv2d(16, 8, kernel_size=3, stride=1, padding=1),
-#             nn.ReLU(),
-#             nn.BatchNorm2d(8),
-#             nn.ReLU(),
-#             nn.Conv2d(8, 8, 3, stride=1, padding=(1,1)),
-#             nn.BatchNorm2d(8),
-#             nn.ReLU()
-#         )
-
-
-#         # Modify final layer to encourage sharp peaks
-#         self.final_layer = nn.Sequential(
-#             nn.Conv2d(8, 1, kernel_size=3, stride=1, padding=1),
-#             nn.ReLU(),  # Keep non-negative
-#             # Remove softmax to allow for sharp peaks
-#         )
-#         # # Final reconstruction layer
-#         # self.final_layer = nn.Conv2d(8, 1, kernel_size=3, stride=1, padding=1)
-        
-#         self.sigmoid = nn.Sigmoid()
-#         self.drop = nn.Dropout(0.75)
-
-#         # Convert probe kernel to torch tensor
-#         probe_kernel = torch.from_numpy(probe_kernel).float()
-#         # Add batch and channel dimensions
-#         probe_kernel = probe_kernel.unsqueeze(0).unsqueeze(0)
-#         #print("Probe kernel shape:", probe_kernel.shape)  # Added print statement
-#         self.register_buffer("probe_kernel", probe_kernel)
-
 class ConvAutoencoderSkip(nn.Module):
     def __init__(self, probe_kernel):
         super(ConvAutoencoderSkip, self).__init__()
 
         # Reduce channel sizes
         self.enc1 = nn.Sequential(
-            nn.Conv2d(1, 64, kernel_size=3, stride=1, padding=1),  # 16->8
+            nn.Conv2d(1, 64, kernel_size=3, stride=1, padding=1),  
             nn.ReLU(),
             nn.BatchNorm2d(64),
             nn.ReLU(),
@@ -168,7 +43,7 @@ class ConvAutoencoderSkip(nn.Module):
         self.pool1 = nn.MaxPool2d(2, 2)
 
         self.enc2 = nn.Sequential(
-            nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1),  # 32->16
+            nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1), 
             nn.ReLU(),
             nn.BatchNorm2d(128),
             nn.ReLU(),
@@ -180,7 +55,7 @@ class ConvAutoencoderSkip(nn.Module):
         
         
         self.enc3 = nn.Sequential(
-            nn.Conv2d(128, 256, kernel_size=3, stride=1, padding=1),  # 32->16
+            nn.Conv2d(128, 256, kernel_size=3, stride=1, padding=1),  
             nn.ReLU(),
             nn.BatchNorm2d(256),
             nn.ReLU(),
@@ -193,7 +68,7 @@ class ConvAutoencoderSkip(nn.Module):
         
         # Bottleneck
         self.bottleneck = nn.Sequential(
-            nn.Conv2d(256, 512, kernel_size=3, stride=1, padding=1),  # 256->128
+            nn.Conv2d(256, 512, kernel_size=3, stride=1, padding=1),  
             nn.ReLU(),
             nn.BatchNorm2d(512),
             nn.ReLU(),
@@ -239,8 +114,8 @@ class ConvAutoencoderSkip(nn.Module):
         # Modify final layer to encourage sharp peaks
         self.final_layer = nn.Sequential(
             nn.Conv2d(64, 1, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(),  # Keep non-negative
-            # Remove softmax to allow for sharp peaks
+            #nn.ReLU(),  # Keep non-negative
+            nn.Sigmoid()
         )
         # # Final reconstruction layer
         # self.final_layer = nn.Conv2d(8, 1, kernel_size=3, stride=1, padding=1)
@@ -255,9 +130,9 @@ class ConvAutoencoderSkip(nn.Module):
         #print("Probe kernel shape:", probe_kernel.shape)  # Added print statement
         self.register_buffer("probe_kernel", probe_kernel)
 
-
-
-
+    def conv2d_probe(self, x):
+        return F.conv2d(x, self.probe_kernel, padding='same')
+    
     def fft_conv2d(self, x):
         # Performing convolution
         
@@ -274,7 +149,12 @@ class ConvAutoencoderSkip(nn.Module):
         output = torch.abs(output_fft)**2
         
         # Normalize output (prevent division by zero)
-        output = output / (torch.max(output) + 1e-8)
+        #output = output / (torch.max(output) + 1e-8)
+        
+        # Normalize
+        batch_min = output.view(output.size(0), -1).min(dim=1, keepdim=True)[0].unsqueeze(2).unsqueeze(3)
+        batch_max = output.view(output.size(0), -1).max(dim=1, keepdim=True)[0].unsqueeze(2).unsqueeze(3)
+        output = (output - batch_min) / (batch_max - batch_min + 1e-8)
         
         # Verify output size
         assert output.size() == x.size(), f"Output size {output.size()} doesn't match input size {x.size()}"
@@ -308,10 +188,12 @@ class ConvAutoencoderSkip(nn.Module):
         # Final output
         decoded = self.sigmoid(self.final_layer(dec3_out))
         #decoded = self.final_layer(dec4_out)
+        
         #print("Decoded shape:", decoded.shape)  # Added print statement
 
         # Use FFT-based convolution instead of spatial convolution
         probe_convolved_output = self.fft_conv2d(decoded)
+        #probe_convolved_output = self.conv2d_probe(decoded)
         
         return decoded, probe_convolved_output
 
@@ -320,121 +202,10 @@ class ConvAutoencoderSkip(nn.Module):
 
 
 
-
-#%%
-
-
-class recon_model(nn.Module):
-    def __init__(self,probe_kernel):
-        super(recon_model, self).__init__()
-
-        def conv_block(in_channels, out_channels):
-            block = nn.Sequential(
-                nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=(1,1)),
-                nn.BatchNorm2d(out_channels),
-                nn.ReLU(),
-                nn.Conv2d(out_channels, out_channels, 3, stride=1, padding=(1,1)),
-                nn.BatchNorm2d(out_channels),
-                nn.ReLU(),
-            )
-            return block
-    
-            
-        def up_conv(in_channels, out_channels):
-            return nn.ConvTranspose2d(in_channels, out_channels, kernel_size=2, stride=2)
-
-            
-        def conv_last(in_channels,out_channels):
-            block = nn.Sequential(
-                nn.Conv2d(in_channels,out_channels, 3, stride=1, padding=(1,1)),
-                nn.Sigmoid()
-            )
-            return block
-        
-        nconv=64
-        #convoluted diffraction pattern encoder
-        self.encoder1 = conv_block(1,nconv)
-        self.encoder2 = conv_block(nconv,nconv*2)
-        self.encoder3 = conv_block(nconv*2,nconv*4)
-        self.encoder4 = conv_block(nconv*4,nconv*4*2)
-
-        self.pool = nn.MaxPool2d((2,2))
-        self.drop = nn.Dropout(0.5)
-
-        self.bottleneck = conv_block(nconv*4*2, nconv*4*2)
-        
-        #convoluted diffraction pattern decoder blocks
-        self.decoder4=conv_block(nconv*4*2*2,nconv*4*2)
-        self.decoder3=conv_block(nconv*4*2,nconv*4)
-        self.decoder2=conv_block(nconv*4,nconv*2)
-        self.decoder1=conv_block(nconv*2,nconv)
-        
-
-        self.up_conv4=up_conv(512,256)
-        self.up_conv3=up_conv(256,128)
-        self.up_conv2=up_conv(128,64)
-        self.conv_last=conv_last(64,1)
-        
-    def fft_conv2d(self, x):
-        # Center input before FFT
-        x_centered = torch.fft.fftshift(x)
-        # Compute FFT of input
-        x_fft = torch.fft.rfft2(x_centered)        
-        
-        # Multiply in frequency domain (element-wise)
-        output_fft = x_fft * probe_kernel
-        
-        # Inverse FFT and shift back
-        output = torch.fft.irfft2(output_fft)
-        output = torch.fft.ifftshift(output)
-        
-        # Normalize
-        batch_min = output.view(output.size(0), -1).min(dim=1, keepdim=True)[0].unsqueeze(2).unsqueeze(3)
-        batch_max = output.view(output.size(0), -1).max(dim=1, keepdim=True)[0].unsqueeze(2).unsqueeze(3)
-        output = (output - batch_min) / (batch_max - batch_min + 1e-8)
-        
-        return output
-    def forward(self,x):#,p):
-        x1 = self.encoder1(x)
-        x2 = self.encoder2(self.drop(self.pool(x1)))
-        x3 = self.encoder3(self.drop(self.pool(x2)))
-        x4 = self.encoder4(self.drop(self.pool(x3)))
-        
-        b = self.bottleneck(self.drop(self.pool(x4)))
-
-        d4 = self.up_conv4(b)
-        d4 = torch.cat((d4, x4), dim=1)
-        d4 = self.decoder4(d4)
-        
-        d3 = self.up_conv3(d4)
-        d3 = torch.cat((d3, x3), dim=1)
-        d3 = self.decoder3(d3)
-
-        d2 = self.up_conv2(d3)
-        d2 = torch.cat((d2, x2), dim=1)
-        d2 = self.decoder2(d2)
-
-        # d1 = self.up_conv1(d2)
-        # d1 = torch.cat((d1, x1), dim=1)
-        # d1 = self.decoder1(d1)
-
-        d0 = self.conv_last(d2)
-        
-        out=d0
-        
-        # Use FFT-based convolution instead of spatial convolution
-        probe_convolved_output = self.fft_conv2d(out)
-        
-        return out, probe_convolved_output
-
-
-
-
-
 #%%
 #Zhihua probe
-#probe=loadmat("/net/micdata/data2/12IDC/2024_Dec/results/JM02_3D_/fly482/roi2_Ndp1024/MLc_L1_p10_gInf_Ndp256_mom0.5_pc100_noModelCon_bg0.1_vi_mm/MLc_L1_p10_g400_Ndp512_mom0.5_pc400_noModelCon_bg0.1_vp4_vi_mm/Niter1000.mat")['probe'].T[0][0].T
-probe=loadmat("/net/micdata/data2/12IDC/2024_Dec/results/JM02_3D_/fly585/roi0_Ndp512/MLc_L1_p10_g1000_Ndp256_mom0.5_pc200_model_scale_rotation_shear_asymmetry_noModelCon_bg0.1_vi_mm/MLc_L1_p10_g100_Ndp512_mom0.5_pc200_model_scale_asymmetry_rotation_shear_maxPosError200nm_noModelCon_bg0.1_vi_mm/Niter600.mat")['probe'].T[0].T
+probe=loadmat("/net/micdata/data2/12IDC/2024_Dec/results/JM02_3D_/fly482/roi2_Ndp1024/MLc_L1_p10_gInf_Ndp256_mom0.5_pc100_noModelCon_bg0.1_vi_mm/MLc_L1_p10_g400_Ndp512_mom0.5_pc400_noModelCon_bg0.1_vp4_vi_mm/Niter1000.mat")['probe'].T[0][0].T
+#probe=loadmat("/net/micdata/data2/12IDC/2024_Dec/results/JM02_3D_/fly585/roi0_Ndp512/MLc_L1_p10_g1000_Ndp256_mom0.5_pc200_model_scale_rotation_shear_asymmetry_noModelCon_bg0.1_vi_mm/MLc_L1_p10_g100_Ndp512_mom0.5_pc200_model_scale_asymmetry_rotation_shear_maxPosError200nm_noModelCon_bg0.1_vi_mm/Niter600.mat")['probe'].T[0].T
 
 print(probe.shape)
 plt.imshow(np.abs(probe))
@@ -448,6 +219,14 @@ dpsize=512
 plt.imshow(np.abs(np.asarray(np.fft.fftshift(np.fft.fft2(probe)))),norm=colors.LogNorm())
 plt.colorbar()
 plt.show()
+
+
+
+# probe=np.asarray(np.fft.fftshift(np.fft.fft2(probe))[256-64:256+64,256-64:256+64])
+# plt.imshow(np.abs(np.asarray(np.fft.fftshift(np.fft.fft2(probe))))[256-64:256+64,256-64:256+64],norm=colors.LogNorm())
+# plt.colorbar()
+# plt.show()
+
 
 #%%
 endsize=512
@@ -544,7 +323,7 @@ NVALID = NTEST//2 # NTRAIN//
 
 print(NTRAIN,NTEST,NVALID)
 
-EPOCHS = 64
+EPOCHS = 128
 NGPUS = torch.cuda.device_count()
 BATCH_SIZE = NGPUS*16#*8
 LR = NGPUS * 1e-3
@@ -699,11 +478,28 @@ def pearson_loss(output, target):
     #loss = 1 + correlation.mean()
     
     return loss
-
+#%%
 # Modify the custom loss function to handle the scale difference
 def custom_loss(output, target,decoded):
-    total_loss = pearson_loss(output, target)
-    return total_loss
+    #total_loss = pearson_loss(output, target)
+    
+    # Create central beam mask
+    offset=(9,-6)
+    h, w = output.shape[2:]
+    y, x = torch.meshgrid(torch.arange(h, device=output.device), 
+                         torch.arange(w, device=output.device))
+    center_y, center_x = h // 2, w // 2
+    r = torch.sqrt((x - (center_x+offset[0]))**2 + (y - (center_y+offset[1]))**2)
+    
+    # Create mask that de-emphasizes central beam (radius can be adjusted)
+    central_beam_radius = 64  # adjust this based on your beam size
+    beam_mask = (r > central_beam_radius).float()
+    beam_mask = beam_mask.to(output.device)[None, None, :, :]
+    
+    # Apply mask to correlation loss
+    conv_loss = pearson_loss(output * beam_mask, target * beam_mask)
+    
+    return conv_loss #total_loss
 
 
 def custom_loss2(output, target, decoded):
@@ -955,44 +751,167 @@ plt.show()
 #%%
 model.eval()
 results = []
+results_pc=[]
 for i, test in enumerate(testloader):
     tests = test[0].to(device)
     result_d,result_pc = model(tests)
     for j in range(tests.shape[0]):
         results.append(result_d[j].detach().to("cpu").numpy())
+        results_pc.append(result_pc[j].detach().to("cpu").numpy())
         
 results = np.array(results).squeeze()
+results_pc = np.array(results_pc).squeeze()
+
+
+
 
 #%%
 h,w = H,W
 ntest=results.shape[0]
 plt.figure()
 n = 5
-f,ax=plt.subplots(3,n,figsize=(15, 12))
+f,ax=plt.subplots(4,n,figsize=(15, 12))
 plt.gcf().text(0.02, 0.8, "Input", fontsize=20)
-plt.gcf().text(0.02, 0.5, "Output", fontsize=20)
-plt.gcf().text(0.02, 0.2, "Difference I", fontsize=20)
+plt.gcf().text(0.02, 0.6, "Output", fontsize=20)
+plt.gcf().text(0.02, 0.4, "PC", fontsize=20)
+plt.gcf().text(0.02, 0.2, "Difference", fontsize=20)
 
 for i in range(0,n):
     j=int(round(np.random.rand()*ntest))
 
     # display FT
-    im=ax[0,i].imshow(X_test[j].reshape(h, w))#,norm=colors.LogNorm())
+    im=ax[0,i].imshow(X_test[j].reshape(h, w))
     plt.colorbar(im, ax=ax[0,i], format='%.2f')
     ax[0,i].get_xaxis().set_visible(False)
     ax[0,i].get_yaxis().set_visible(False)
     
     # display predicted intens
-    im=ax[1,i].imshow(results[j].reshape(h, w))#,norm=colors.LogNorm())
+    im=ax[1,i].imshow(results[j].reshape(h, w))
     plt.colorbar(im, ax=ax[1,i], format='%.2f')
     ax[1,i].get_xaxis().set_visible(False)
     ax[1,i].get_yaxis().set_visible(False)
 
-    #Difference in amplitude
-    im=ax[2,i].imshow(X_test[j].reshape(h, w)-results[j].reshape(h, w))#,norm=colors.LogNorm())
+    
+    #Probe convolved
+    im=ax[2,i].imshow(results_pc[j].reshape(h, w))
     plt.colorbar(im, ax=ax[2,i], format='%.2f')
     ax[2,i].get_xaxis().set_visible(False)
     ax[2,i].get_yaxis().set_visible(False)
+    
+    #Difference in amplitude
+    im=ax[3,i].imshow(X_test[j].reshape(h, w)-results_pc[j].reshape(h, w))
+    plt.colorbar(im, ax=ax[3,i], format='%.2f')
+    ax[3,i].get_xaxis().set_visible(False)
+    ax[3,i].get_yaxis().set_visible(False)
 plt.show()
 
+
+
+
+
+
+
+
+# %%
+def azimuthal_average(image, center=None):
+    # Get image dimensions
+    y, x = np.indices(image.shape)
+    
+    if center is None:
+        center = np.array([(x.max() - x.min()) / 2.0, (y.max() - y.min()) / 2.0])
+    
+    # Calculate radius for each pixel
+    r = np.sqrt((x - center[0])**2 + (y - center[1])**2)
+    r = r.astype(np.int32)
+    
+    # Get sorted radii
+    tbin = np.bincount(r.ravel(), weights=image.ravel())
+    nr = np.bincount(r.ravel())
+    
+    # Avoid division by zero
+    radialprofile = np.zeros_like(tbin)
+    mask = nr > 0
+    radialprofile[mask] = tbin[mask] / nr[mask]
+    
+    return radialprofile
+
+h, w = H, W
+ntest = results.shape[0]
+n = 5
+
+# Create figure with both 2D images and 1D profiles
+f, ax = plt.subplots(5, n, figsize=(20, 20), gridspec_kw={'height_ratios': [1, 1, 1, 1, 1.2]})
+plt.gcf().text(0.02, 0.85, "Input", fontsize=20)
+plt.gcf().text(0.02, 0.67, "Output", fontsize=20)
+plt.gcf().text(0.02, 0.49, "PC", fontsize=20)
+plt.gcf().text(0.02, 0.31, "Difference", fontsize=20)
+plt.gcf().text(0.02, 0.13, "Radial Profiles", fontsize=20)
+
+for i in range(0, n):
+    j = int(round(np.random.rand()*ntest))
+    
+    # Get images
+    input_img = X_test[j].reshape(h, w)
+    output_img = results[j].reshape(h, w)
+    pc_img = results_pc[j].reshape(h, w)
+    diff_img = input_img - pc_img
+    
+    # Create circle coordinates
+    theta = np.linspace(0, 2*np.pi, 100)
+    radius = 160
+    circle_x = center[0]+9 + radius * np.cos(theta)
+    circle_y = center[1]-6 + radius * np.sin(theta)
+    
+    # 2D plots with circles
+    for row in range(4):
+        im = ax[row,i].imshow([input_img, output_img, pc_img, diff_img][row])
+        ax[row,i].plot(circle_x, circle_y, 'r--', linewidth=1, alpha=0.8)
+        ax[row,i].get_xaxis().set_visible(False)
+        ax[row,i].get_yaxis().set_visible(False)
+    
+    
+    # 2D plots
+    im = ax[0,i].imshow(input_img)
+    plt.colorbar(im, ax=ax[0,i], format='%.2f')
+    ax[0,i].get_xaxis().set_visible(False)
+    ax[0,i].get_yaxis().set_visible(False)
+    
+    im = ax[1,i].imshow(output_img)
+    plt.colorbar(im, ax=ax[1,i], format='%.2f')
+    ax[1,i].get_xaxis().set_visible(False)
+    ax[1,i].get_yaxis().set_visible(False)
+    
+    im = ax[2,i].imshow(pc_img)
+    plt.colorbar(im, ax=ax[2,i], format='%.2f')
+    ax[2,i].get_xaxis().set_visible(False)
+    ax[2,i].get_yaxis().set_visible(False)
+    
+    im = ax[3,i].imshow(diff_img)
+    plt.colorbar(im, ax=ax[3,i], format='%.2f')
+    ax[3,i].get_xaxis().set_visible(False)
+    ax[3,i].get_yaxis().set_visible(False)
+    
+    # Calculate radial profiles
+    center = np.array([w/2, h/2])
+    r_input = azimuthal_average(input_img, center)
+    r_output = azimuthal_average(output_img, center)
+    r_pc = azimuthal_average(pc_img, center)
+    r_diff = azimuthal_average(diff_img, center)
+    
+    # Plot radial profiles
+    radii = np.arange(len(r_input))
+    #ax[4,i].plot(radii, r_input, 'b-', label='Input')
+    ax[4,i].plot(radii, r_output, 'r--', label='Output')
+    #ax[4,i].plot(radii, r_pc, 'g:', label='PC')
+    #ax[4,i].plot(radii, r_diff, 'k-', label='Difference')
+    # Add vertical line at r=128
+    ax[4,i].axvline(x=radius, color='r', linestyle='--', alpha=0.8)
+    if i == 0:  # Only show legend for first plot
+        ax[4,i].legend()
+    ax[4,i].set_xlabel('Radius (pixels)')
+    ax[4,i].set_ylabel('Intensity')
+    ax[4,i].grid(True)
+
+plt.tight_layout()
+plt.show()
 # %%
