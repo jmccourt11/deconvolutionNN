@@ -12,26 +12,49 @@ sys.path.append(os.path.abspath(os.path.join(os.getcwd(), '../')))
 from src.utils.deconvolutionRL import *
 
 #%%
-##set paths
-#basepath1=Path("W:/ptychosaxs/")
-#basepath2=Path("Y:/")
+#set paths
+basepath1=Path("W:/ptychosaxs/")
+basepath2=Path("Y:/")
 
-##chansong
-#dps=np.load(basepath1 / 'interpolated.npy')
-#phis=np.load(basepath2 / '2023_Mar/results/ML_recon/scans_585_to_765/phis.npz')['phi']
-#scans=np.load(basepath2 / '2023_Mar/results/ML_recon/scans_585_to_765/phis.npz')['scan']
-#print(phis,scans)
-
-##set paths
-basepath2=Path("/net/micdata/data2/12IDC/")
+#chansong
+dps=np.load(basepath1 / 'interpolated_chansong.npy')
+phis=np.load(basepath2 / '2023_Mar/results/ML_recon/scans_585_to_765/phis.npz')['phi']
+scans=np.load(basepath2 / '2023_Mar/results/ML_recon/scans_585_to_765/phis.npz')['scan']
+print(phis,scans)
 
 #%%
-#zhihua (comissioning)
-df =pd.read_csv(basepath2 / '2024_Dec/indices_phi_samplename.txt',header=None)
-filtered_df=df[df[df.columns[2]]==' JM01_3D_']
-scans=filtered_df[filtered_df.columns[0]].values
-phis=filtered_df[filtered_df.columns[1]].values
-dps=np.asarray([np.sum(load_h5_scan_to_npy(basepath2 / f'2024_Dec/ptycho/',scan,plot=False),axis=0) for scan in tqdm(scans[10:12])])
+test=np.load('/home/beams/PTYCHOSAXS/NN/interpolated_chansong.npy')
+test2=np.load('/home/beams/PTYCHOSAXS/NN/interpolated_deconvolved.npy')
+ri=109
+
+fig,ax=plt.subplots(1,2)
+ax[0].imshow(test[ri],norm=colors.LogNorm(),cmap='jet')
+ax[0].set_title('Diffraction Pattern',fontsize=12)
+ax[1].imshow(test2[ri],norm=colors.LogNorm(),cmap='jet')
+ax[1].set_title('Recovered (RL)',fontsize=12)
+
+# fig,ax=plt.subplots(2,2)
+# ax[0,0].imshow(test[ri],norm=colors.LogNorm(),cmap='jet')
+# ax[0,0].set_title('Diffraction Pattern (scan {:03})'.format(ri),fontsize=12)
+# ax[0,1].imshow(test2[ri],norm=colors.LogNorm(),cmap='jet')
+# ax[0,1].set_title('Deconvolved (RL) (scan {:03})'.format(ri),fontsize=12)
+# ax[1,0].imshow(test[ri][test[ri].shape[0]//2-128:test[ri].shape[0]//2+128,test[ri].shape[1]//2-128:test[ri].shape[1]//2+128],norm=colors.LogNorm(),cmap='jet')
+# ax[1,0].set_title('Diffraction Pattern (scan {:03})'.format(ri),fontsize=12)
+# ax[1,1].imshow(test2[ri][test2[ri].shape[0]//2-128:test2[ri].shape[0]//2+128,test2[ri].shape[1]//2-128:test2[ri].shape[1]//2+128],norm=colors.LogNorm(),cmap='jet')
+# ax[1,1].set_title('Deconvolved (RL) (scan {:03})'.format(ri),fontsize=12)
+plt.show()
+#%%
+
+# ##set paths
+# basepath2=Path("/net/micdata/data2/12IDC/")
+
+# #%%
+# #zhihua (comissioning)
+# df =pd.read_csv(basepath2 / '2024_Dec/indices_phi_samplename.txt',header=None)
+# filtered_df=df[df[df.columns[2]]==' JM01_3D_']
+# scans=filtered_df[filtered_df.columns[0]].values
+# phis=filtered_df[filtered_df.columns[1]].values
+# dps=np.asarray([np.sum(load_h5_scan_to_npy(basepath2 / f'2024_Dec/ptycho/',scan,plot=False),axis=0) for scan in tqdm(scans[10:12])])
 
 ##%%
 #ri=random.choice(scans)

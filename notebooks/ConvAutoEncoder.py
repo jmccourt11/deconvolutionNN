@@ -18,6 +18,7 @@ from sklearn.utils import shuffle
 from torch.utils.data import TensorDataset, DataLoader
 import pdb
 from torchmetrics.regression import PearsonCorrCoef
+import h5py
 #%%
 sys.path.append(os.path.abspath(os.path.join(os.getcwd(), '../../NN/ptychosaxsNN/'))) 
 import utils.ptychosaxsNN_utils as ptNN_U
@@ -26,6 +27,110 @@ importlib.reload(ptNN_U)
 importlib.reload(ptNN)
 #%%
 
+# class ConvAutoencoderSkip(nn.Module):
+#     def __init__(self, probe_kernel):
+#         super(ConvAutoencoderSkip, self).__init__()
+
+#         # Reduce channel sizes
+#         self.enc1 = nn.Sequential(
+#             nn.Conv2d(1, 64, kernel_size=3, stride=1, padding=1),  
+#             nn.ReLU(),
+#             nn.BatchNorm2d(64),
+#             nn.ReLU(),
+#             nn.Conv2d(64, 64, 3, stride=1, padding=(1,1)),
+#             nn.BatchNorm2d(64),
+#             nn.ReLU()
+#         )
+#         self.pool1 = nn.MaxPool2d(2, 2)
+
+#         self.enc2 = nn.Sequential(
+#             nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1), 
+#             nn.ReLU(),
+#             nn.BatchNorm2d(128),
+#             nn.ReLU(),
+#             nn.Conv2d(128, 128, 3, stride=1, padding=(1,1)),
+#             nn.BatchNorm2d(128),
+#             nn.ReLU()
+#         )
+#         self.pool2 = nn.MaxPool2d(2, 2)
+        
+        
+#         self.enc3 = nn.Sequential(
+#             nn.Conv2d(128, 256, kernel_size=3, stride=1, padding=1),  
+#             nn.ReLU(),
+#             nn.BatchNorm2d(256),
+#             nn.ReLU(),
+#             nn.Conv2d(256, 256, 3, stride=1, padding=(1,1)),
+#             nn.BatchNorm2d(256),
+#             nn.ReLU()
+#         )
+#         self.pool3 = nn.MaxPool2d(2, 2)
+        
+        
+#         # Bottleneck
+#         self.bottleneck = nn.Sequential(
+#             nn.Conv2d(256, 512, kernel_size=3, stride=1, padding=1),  
+#             nn.ReLU(),
+#             nn.BatchNorm2d(512),
+#             nn.ReLU(),
+#             nn.Conv2d(512, 512, 3, stride=1, padding=(1,1)),
+#             nn.BatchNorm2d(512),
+#             nn.ReLU()
+#         )
+
+#         # Decoder with Skip Connections (reduced channels)
+#         self.up1 = nn.ConvTranspose2d(512, 256, kernel_size=2, stride=2, padding=0)
+#         self.dec1 = nn.Sequential(
+#             nn.Conv2d(512, 256, kernel_size=3, stride=1, padding=1),
+#             nn.ReLU(),
+#             nn.BatchNorm2d(256),
+#             nn.ReLU(),
+#             nn.Conv2d(256, 256, 3, stride=1, padding=(1,1)),
+#             nn.BatchNorm2d(256),
+#             nn.ReLU()
+#         )
+
+#         self.up2 = nn.ConvTranspose2d(256, 128, kernel_size=2, stride=2, padding=0)
+#         self.dec2 = nn.Sequential(
+#             nn.Conv2d(256, 128, kernel_size=3, stride=1, padding=1),
+#             nn.ReLU(),
+#             nn.BatchNorm2d(128),
+#             nn.ReLU(),
+#             nn.Conv2d(128, 128, 3, stride=1, padding=(1,1)),
+#             nn.BatchNorm2d(128),
+#             nn.ReLU()
+#         )
+    
+#         self.up3 = nn.ConvTranspose2d(128, 64, kernel_size=2, stride=2, padding=0)
+#         self.dec3 = nn.Sequential(
+#             nn.Conv2d(128, 64, kernel_size=3, stride=1, padding=1),
+#             nn.ReLU(),
+#             nn.BatchNorm2d(64),
+#             nn.ReLU(),
+#             nn.Conv2d(64, 64, 3, stride=1, padding=(1,1)),
+#             nn.BatchNorm2d(64),
+#             nn.ReLU()
+#         )
+
+#         # Modify final layer to encourage sharp peaks
+#         self.final_layer = nn.Sequential(
+#             nn.Conv2d(64, 1, kernel_size=3, stride=1, padding=1),
+#             #nn.ReLU(),  # Keep non-negative
+#             nn.Sigmoid()
+#         )
+#         # # Final reconstruction layer
+#         # self.final_layer = nn.Conv2d(8, 1, kernel_size=3, stride=1, padding=1)
+        
+#         self.sigmoid = nn.Sigmoid()
+#         self.drop = nn.Dropout(0.75)
+
+#         # Convert probe kernel to torch tensor
+#         probe_kernel = torch.from_numpy(probe_kernel).float()
+#         # Add batch and channel dimensions
+#         probe_kernel = probe_kernel.unsqueeze(0).unsqueeze(0)
+#         #print("Probe kernel shape:", probe_kernel.shape)  # Added print statement
+#         self.register_buffer("probe_kernel", probe_kernel)
+        
 class ConvAutoencoderSkip(nn.Module):
     def __init__(self, probe_kernel):
         super(ConvAutoencoderSkip, self).__init__()
@@ -54,7 +159,9 @@ class ConvAutoencoderSkip(nn.Module):
         self.pool2 = nn.MaxPool2d(2, 2)
         
         
-        self.enc3 = nn.Sequential(
+        
+        # Bottleneck
+        self.bottleneck = nn.Sequential(
             nn.Conv2d(128, 256, kernel_size=3, stride=1, padding=1),  
             nn.ReLU(),
             nn.BatchNorm2d(256),
@@ -63,34 +170,10 @@ class ConvAutoencoderSkip(nn.Module):
             nn.BatchNorm2d(256),
             nn.ReLU()
         )
-        self.pool3 = nn.MaxPool2d(2, 2)
-        
-        
-        # Bottleneck
-        self.bottleneck = nn.Sequential(
-            nn.Conv2d(256, 512, kernel_size=3, stride=1, padding=1),  
-            nn.ReLU(),
-            nn.BatchNorm2d(512),
-            nn.ReLU(),
-            nn.Conv2d(512, 512, 3, stride=1, padding=(1,1)),
-            nn.BatchNorm2d(512),
-            nn.ReLU()
-        )
 
         # Decoder with Skip Connections (reduced channels)
-        self.up1 = nn.ConvTranspose2d(512, 256, kernel_size=2, stride=2, padding=0)
+        self.up1 = nn.ConvTranspose2d(256, 128, kernel_size=2, stride=2, padding=0)
         self.dec1 = nn.Sequential(
-            nn.Conv2d(512, 256, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(),
-            nn.BatchNorm2d(256),
-            nn.ReLU(),
-            nn.Conv2d(256, 256, 3, stride=1, padding=(1,1)),
-            nn.BatchNorm2d(256),
-            nn.ReLU()
-        )
-
-        self.up2 = nn.ConvTranspose2d(256, 128, kernel_size=2, stride=2, padding=0)
-        self.dec2 = nn.Sequential(
             nn.Conv2d(256, 128, kernel_size=3, stride=1, padding=1),
             nn.ReLU(),
             nn.BatchNorm2d(128),
@@ -99,9 +182,9 @@ class ConvAutoencoderSkip(nn.Module):
             nn.BatchNorm2d(128),
             nn.ReLU()
         )
-    
-        self.up3 = nn.ConvTranspose2d(128, 64, kernel_size=2, stride=2, padding=0)
-        self.dec3 = nn.Sequential(
+
+        self.up2 = nn.ConvTranspose2d(128, 64, kernel_size=2, stride=2, padding=0)
+        self.dec2 = nn.Sequential(
             nn.Conv2d(128, 64, kernel_size=3, stride=1, padding=1),
             nn.ReLU(),
             nn.BatchNorm2d(64),
@@ -110,6 +193,7 @@ class ConvAutoencoderSkip(nn.Module):
             nn.BatchNorm2d(64),
             nn.ReLU()
         )
+    
 
         # Modify final layer to encourage sharp peaks
         self.final_layer = nn.Sequential(
@@ -170,30 +254,24 @@ class ConvAutoencoderSkip(nn.Module):
         enc2_out = self.enc2(enc1_pooled)
         enc2_pooled = self.drop(self.pool2(enc2_out))
 
-        enc3_out = self.enc3(enc2_pooled)
-        enc3_pooled = self.drop(self.pool3(enc3_out))
-
         # Bottleneck
-        bottleneck_out = self.bottleneck(enc3_pooled)
+        bottleneck_out = self.bottleneck(enc2_pooled)
 
         # Decoder with Skip Connections
         up1_out = self.up1(bottleneck_out)
-        dec1_out = self.dec1(torch.cat([up1_out, enc3_out], dim=1))
+        dec1_out = self.dec1(torch.cat([up1_out, enc2_out], dim=1))
 
         up2_out = self.up2(dec1_out)
-        dec2_out = self.dec2(torch.cat([up2_out, enc2_out], dim=1)) 
+        dec2_out = self.dec2(torch.cat([up2_out, enc1_out], dim=1)) 
 
-        up3_out = self.up3(dec2_out)
-        dec3_out = self.dec3(torch.cat([up3_out, enc1_out], dim=1))
         # Final output
-        decoded = self.sigmoid(self.final_layer(dec3_out))
-        #decoded = self.final_layer(dec4_out)
+        decoded = self.sigmoid(self.final_layer(dec2_out))
         
         #print("Decoded shape:", decoded.shape)  # Added print statement
 
         # Use FFT-based convolution instead of spatial convolution
-        probe_convolved_output = self.fft_conv2d(decoded)
-        #probe_convolved_output = self.conv2d_probe(decoded)
+        #probe_convolved_output = self.fft_conv2d(decoded)
+        probe_convolved_output = self.conv2d_probe(decoded)
         
         return decoded, probe_convolved_output
 
@@ -204,14 +282,19 @@ class ConvAutoencoderSkip(nn.Module):
 
 #%%
 #Zhihua probe
-probe=loadmat("/net/micdata/data2/12IDC/2024_Dec/results/JM02_3D_/fly482/roi2_Ndp1024/MLc_L1_p10_gInf_Ndp256_mom0.5_pc100_noModelCon_bg0.1_vi_mm/MLc_L1_p10_g400_Ndp512_mom0.5_pc400_noModelCon_bg0.1_vp4_vi_mm/Niter1000.mat")['probe'].T[0][0].T
+#probe=loadmat("/net/micdata/data2/12IDC/2024_Dec/results/JM02_3D_/fly482/roi2_Ndp1024/MLc_L1_p10_gInf_Ndp256_mom0.5_pc100_noModelCon_bg0.1_vi_mm/MLc_L1_p10_g400_Ndp512_mom0.5_pc400_noModelCon_bg0.1_vp4_vi_mm/Niter1000.mat")['probe'].T[0][0].T
 #probe=loadmat("/net/micdata/data2/12IDC/2024_Dec/results/JM02_3D_/fly585/roi0_Ndp512/MLc_L1_p10_g1000_Ndp256_mom0.5_pc200_model_scale_rotation_shear_asymmetry_noModelCon_bg0.1_vi_mm/MLc_L1_p10_g100_Ndp512_mom0.5_pc200_model_scale_asymmetry_rotation_shear_maxPosError200nm_noModelCon_bg0.1_vi_mm/Niter600.mat")['probe'].T[0].T
+with h5py.File("/net/micdata/data2/12IDC/2025_Feb/ptychi_recons/S5008/Ndp256_LSQML_c1000_m0.5_p15_cp_mm_opr3_ic_pc_ul2/recon_Niter1000.h5",'r') as f:
+    probe=f['probe'][0][0]
+
+
+
 
 print(probe.shape)
 plt.imshow(np.abs(probe))
 plt.colorbar()
 plt.show()
-dpsize=512
+dpsize=256#512
 # probe=resize(probe,(dpsize,dpsize),preserve_range=True,anti_aliasing=True)
 # plt.imshow(probe)
 # plt.colorbar()
@@ -221,6 +304,7 @@ plt.colorbar()
 plt.show()
 
 
+#%%
 
 # probe=np.asarray(np.fft.fftshift(np.fft.fft2(probe))[256-64:256+64,256-64:256+64])
 # plt.imshow(np.abs(np.asarray(np.fft.fftshift(np.fft.fft2(probe))))[256-64:256+64,256-64:256+64],norm=colors.LogNorm())
@@ -229,38 +313,43 @@ plt.show()
 
 
 #%%
-endsize=512
+endsize=128
 #%%
 # Separate resize for real and imaginary components
-# probe_real = resize(np.real(probe), (endsize,endsize), preserve_range=True, anti_aliasing=True)
-# probe_imag = resize(np.imag(probe), (endsize,endsize), preserve_range=True, anti_aliasing=True)
-# # Recombine into complex array
-# probe = probe_real + 1j * probe_imag
-# # Verify the resize maintained complex structure
-# plt.figure(figsize=(12,4))
-# plt.subplot(131)
-# plt.imshow(np.abs(probe))
-# plt.title('Magnitude')
-# plt.colorbar()
-# plt.subplot(132)
-# plt.imshow(np.angle(probe))
-# plt.title('Phase')
-# plt.colorbar()
+probe_real = resize(np.real(probe), (endsize,endsize), preserve_range=True, anti_aliasing=True)
+probe_imag = resize(np.imag(probe), (endsize,endsize), preserve_range=True, anti_aliasing=True)
+# Recombine into complex array
+probe = probe_real + 1j * probe_imag
+# Verify the resize maintained complex structure
+plt.figure(figsize=(12,4))
+plt.subplot(131)
+plt.imshow(np.abs(probe))
+plt.title('Magnitude')
+plt.colorbar()
+plt.subplot(132)
+plt.imshow(np.angle(probe))
+plt.title('Phase')
+plt.colorbar()
 
 #%%
 all_dps=[]
-for scan in np.arange(578,585):
-    dps = ptNN_U.load_h5_scan_to_npy(Path(f'/net/micdata/data2/12IDC/2024_Dec/ptycho/'),scan,plot=False)
+for scan in np.arange(5101,5105):
+    #dps = ptNN_U.load_h5_scan_to_npy(Path(f'/net/micdata/data2/12IDC/2024_Dec/ptycho/'),scan,plot=False)
+    dps = ptNN_U.load_h5_scan_to_npy(Path(f'/net/micdata/data2/12IDC/2025_Feb/ptycho/'),scan,plot=False)
     all_dps.append(dps)
 temp_dps=np.asarray(all_dps)
 #%%
 dps=temp_dps.reshape(-1,temp_dps.shape[2],temp_dps.shape[3])
-center=np.array([dps.shape[1]//2-100,dps.shape[2]//2])
+#%%
+#center=np.array([dps.shape[1]//2-100,dps.shape[2]//2])
+center=np.array([dps.shape[1]//2-4,dps.shape[2]//2+85])
+print(f"center: {center}")
 ri=random.randint(0,dps.shape[0]-1)
 test=dps[ri][center[0]-dpsize//2:center[0]+dpsize//2,center[1]-dpsize//2:center[1]+dpsize//2]
 plt.imshow(test,norm=colors.LogNorm())
 plt.colorbar()
 plt.show()
+#%%
 test=resize(test,(endsize,endsize),preserve_range=True,anti_aliasing=True)
 plt.imshow(test,norm=colors.LogNorm())
 plt.colorbar()
@@ -278,7 +367,7 @@ amp_conv = ptNN_U.log10_custom(conv_DPs_shuff)
 
 #%%
 print('resizing')
-amp_conv_red=np.asarray([resize(d[center[0]-256:center[0]+256,center[1]-256:center[1]+256],(endsize,endsize),preserve_range=True,anti_aliasing=True) for d in tqdm(amp_conv)])
+amp_conv_red=np.asarray([resize(d[center[0]-128:center[0]+128,center[1]-128:center[1]+128],(endsize,endsize),preserve_range=True,anti_aliasing=True) for d in tqdm(amp_conv)])
 print('normalizing')
 amp_conv_red=np.asarray([(a-np.min(a))/(np.max(a)-np.min(a)) for a in tqdm(amp_conv_red)])
 
@@ -426,6 +515,7 @@ testloader = DataLoader(test_dataV, batch_size=BATCH_SIZE, shuffle=False, num_wo
 #    dtype=torch.float32
 #)  # Shape: (out_channels, in_channels, kernel_height, kernel_width)
 probe_kernel=probe
+#probe_kernel=np.asarray(np.fft.fftshift(np.fft.fft2(probe)))
 # Initialize the model
 model = ConvAutoencoderSkip(probe_kernel)
 #model=recon_model(probe_kernel)
