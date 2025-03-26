@@ -45,11 +45,10 @@ class recon_model(nn.Module):
         self.decoder3=conv_block(nconv*4,nconv*2)
         self.decoder2=conv_block(nconv*2,nconv)
         
-        self.up_conv4=up_conv(512,256)
-        self.up_conv3=up_conv(256,128)
-        self.up_conv2=up_conv(128,64)
-
-        self.conv_last=conv_last(64,1)
+        self.up_conv4=up_conv(nconv*4*2,nconv*4)
+        self.up_conv3=up_conv(nconv*4,nconv*2)
+        self.up_conv2=up_conv(nconv*2,nconv)
+        self.conv_last=conv_last(nconv,1)
         
     def forward(self,x):#,p):
         x1 = self.encoder1(x)
