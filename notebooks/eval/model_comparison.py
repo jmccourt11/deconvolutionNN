@@ -63,9 +63,9 @@ def calculate_normalized_cross_correlation(img1: np.ndarray, img2: np.ndarray) -
     # Return maximum correlation value
     return np.max(corr)
 
-def find_peaks_and_fwhm(image: np.ndarray, threshold: float = 0.25, sigma: float = 1.0) -> Tuple[List[Tuple[float, float]], List[float]]:
+def find_peaks_and_fwhm(image: np.ndarray, threshold: float = 0.35, sigma: float = 1.0) -> Tuple[List[Tuple[float, float]], List[float]]:
     """
-    Find peaks and their FWHM in a 2D image.
+    Find peaks and their FWHM in a 2D image, including peaks at edges.
     
     Args:
         image (np.ndarray): Input image
@@ -86,26 +86,72 @@ def find_peaks_and_fwhm(image: np.ndarray, threshold: float = 0.25, sigma: float
     max_val = np.max(smoothed)
     threshold_val = max_val * threshold
     
-    # Find peaks above threshold
-    for i in range(1, smoothed.shape[0]-1):
-        for j in range(1, smoothed.shape[1]-1):
-            if smoothed[i,j] > threshold_val:
-                if (smoothed[i,j] > smoothed[i-1,j] and 
-                    smoothed[i,j] > smoothed[i+1,j] and
-                    smoothed[i,j] > smoothed[i,j-1] and
-                    smoothed[i,j] > smoothed[i,j+1]):
-                    peaks.append((i, j))
+    height, width = smoothed.shape
+    
+    # Function to check if a point is a local maximum in its available neighborhood
+    def is_local_max(i: int, j: int) -> bool:
+        val = smoothed[i,j]
+        
+        # Define the neighborhood bounds, accounting for edges
+        i_start = max(0, i-1)
+        i_end = min(height, i+2)
+        j_start = max(0, j-1)
+        j_end = min(width, j+2)
+        
+        # Get the neighborhood
+        neighborhood = smoothed[i_start:i_end, j_start:j_end]
+        
+        # For edge pixels, we only require them to be maximum in their partial neighborhood
+        return val >= np.max(neighborhood)
+    
+    # Find peaks above threshold, including at edges
+    for i in range(height):
+        for j in range(width):
+            if smoothed[i,j] > threshold_val and is_local_max(i, j):
+                peaks.append((i, j))
+                
+                # Calculate FWHM in x and y directions
+                x_profile = smoothed[i,:]
+                y_profile = smoothed[:,j]
+                center_val = smoothed[i,j]
+                half_max = center_val / 2
+                
+                try:
+                    # X direction FWHM
+                    x_above = x_profile > half_max
                     
-                    # Calculate FWHM in x and y directions
-                    x_profile = smoothed[i,:]
-                    y_profile = smoothed[:,j]
+                    # Handle edge cases for X direction
+                    if j == 0 or j == width-1:
+                        # If peak is at edge, measure FWHM from the edge
+                        x_fwhm = 2 * np.sum(x_above)  # Double to account for assumed symmetry
+                    else:
+                        x_transitions = np.where(x_above[:-1] != x_above[1:])[0]
+                        if len(x_transitions) >= 2:
+                            x_fwhm = x_transitions[-1] - x_transitions[0]
+                        else:
+                            x_fwhm = np.sum(x_above)
                     
-                    # Find half-max points
-                    half_max = smoothed[i,j] / 2
-                    x_fwhm = np.sum(x_profile > half_max)
-                    y_fwhm = np.sum(y_profile > half_max)
+                    # Y direction FWHM
+                    y_above = y_profile > half_max
+                    
+                    # Handle edge cases for Y direction
+                    if i == 0 or i == height-1:
+                        # If peak is at edge, measure FWHM from the edge
+                        y_fwhm = 2 * np.sum(y_above)  # Double to account for assumed symmetry
+                    else:
+                        y_transitions = np.where(y_above[:-1] != y_above[1:])[0]
+                        if len(y_transitions) >= 2:
+                            y_fwhm = y_transitions[-1] - y_transitions[0]
+                        else:
+                            y_fwhm = np.sum(y_above)
                     
                     # Use average of x and y FWHM
+                    fwhm_values.append((x_fwhm + y_fwhm) / 2)
+                    
+                except Exception:
+                    # Fallback method for FWHM calculation
+                    x_fwhm = np.sum(x_profile > half_max)
+                    y_fwhm = np.sum(y_profile > half_max)
                     fwhm_values.append((x_fwhm + y_fwhm) / 2)
     
     return peaks, fwhm_values
@@ -283,7 +329,7 @@ def create_comparison_grid_from_config(model_configs: Dict,
                                      calculate_ssim: bool = True,
                                      calculate_xcorr: bool = False,
                                      calculate_peaks: bool = True,
-                                     peak_sigma: float = 2.0) -> plt.Figure:
+                                     peak_sigma: float = 1.0) -> plt.Figure:
     """
     Create a grid plot comparing outputs from different models using model_configs.
     Shows input and ideal images above the model comparison grid.
@@ -423,7 +469,7 @@ def create_comparison_grid_from_config(model_configs: Dict,
             metrics_text.append(f'FWHM Diff: {metrics["fwhm_diff"]:.2f}')
             if ideal_peaks:
                 metrics_text.append(f'Matched: {matched_peaks}/{len(ideal_peaks)}')
-                metrics_text.append(f'Sigma: {peak_sigma:.1f}')
+                #metrics_text.append(f'Sigma: {peak_sigma:.1f}')
         
         # Add metrics text in the corner
         ax.text(0.02, 0.98, '\n'.join(metrics_text),
@@ -466,10 +512,265 @@ def save_comparison_grid(fig: plt.Figure, save_path: str):
     fig.savefig(save_path, dpi=300, bbox_inches='tight')
     plt.close(fig)
 
+def calculate_cumulative_stats(model_configs: Dict,
+                           indices_list: List[Tuple[int, int, int]],
+                           base_path: str = "",
+                           mask_path: str = '/home/beams/PTYCHOSAXS/deconvolutionNN/data/mask/mask_ZCB_9_3D.npy',
+                           data_path: str = '/net/micdata/data2/12IDC/ptychosaxs/data/diff_sim/lattice_ls400_gs1024_lsp6_r3.0_typeSC',
+                           calculate_psnr: bool = True,
+                           calculate_ssim: bool = True,
+                           calculate_xcorr: bool = False,
+                           calculate_peaks: bool = True,
+                           peak_sigma: float = 1.0,
+                           central_only: bool = True) -> Dict[str, Dict[str, float]]:
+    """
+    Calculate cumulative statistics across multiple input patterns.
+    
+    Args:
+        model_configs (Dict): Dictionary containing model configurations
+        indices_list (List[Tuple[int, int, int]]): List of (hr, kr, lr) indices
+        base_path (str): Base path where models are stored
+        mask_path (str): Path to the mask file
+        data_path (str): Path to the data directory
+        calculate_psnr (bool): Whether to calculate PSNR
+        calculate_ssim (bool): Whether to calculate SSIM
+        calculate_xcorr (bool): Whether to calculate cross-correlation
+        calculate_peaks (bool): Whether to calculate peak metrics
+        peak_sigma (float): Sigma for Gaussian smoothing in peak detection
+        central_only (bool): If True, only process central pattern (num=5), 
+                           if False, process all patterns (num=1-9)
+        
+    Returns:
+        Dict[str, Dict[str, float]]: Dictionary of cumulative statistics per model
+    """
+    # Load mask
+    mask = np.load(mask_path)
+    
+    # Initialize statistics dictionary
+    stats = {}
+    
+    # Get model paths
+    model_info = get_model_paths_from_config(model_configs, base_path)
+    if not model_info:
+        raise ValueError("No valid model paths found in the configuration")
+    
+    # Create DataFrame for easier organization
+    df = pd.DataFrame(model_info)
+    df = df.sort_values(['iterations', 'loss_type'])
+    
+    # Initialize metrics for each model
+    for _, row in df.iterrows():
+        model_key = f"{row['loss_type']}_{'Unet' if row['use_unet'] else 'no_Unet'}_{row['iterations']}"
+        stats[model_key] = {
+            'psnr_sum': 0.0,
+            'ssim_sum': 0.0,
+            'xcorr_sum': 0.0,
+            'peak_dist_sum': 0.0,
+            'fwhm_diff_sum': 0.0,
+            'total_peaks_ideal': 0,
+            'total_peaks_matched': 0,
+            'pattern_count': 0
+        }
+    
+    # Process each pattern
+    for hr, kr, lr in indices_list:
+        # Define which pattern numbers to process
+        pattern_nums = [5] if central_only else range(1, 10)
+        
+        for num in pattern_nums:
+            # Load and preprocess data
+            pattern_file = f'output_hanning_conv_{hr}_{kr}_{lr}_0000{num}.npz'
+            try:
+                data = np.load(f'{data_path}/{pattern_file}')
+            except FileNotFoundError:
+                print(f"Warning: File not found: {pattern_file}")
+                continue
+            
+            dp_pp, _, _ = ptNN_U.preprocess_ZCB_9(data['convDP'], mask)
+            dp_pp_IDEAL, _, _ = ptNN_U.preprocess_ZCB_9(data['pinholeDP_extra_conv'], mask=np.ones(dp_pp[0][0].shape))
+            
+            # Convert to GPU if available
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            dp_pp = dp_pp.to(device=device, dtype=torch.float)
+            dp_pp_IDEAL = dp_pp_IDEAL.to(device=device, dtype=torch.float)
+            
+            # Process each model
+            for _, row in df.iterrows():
+                model_key = f"{row['loss_type']}_{'Unet' if row['use_unet'] else 'no_Unet'}_{row['iterations']}"
+                
+                # Load and run model
+                model = load_model(row['path'], row['use_unet'])
+                with torch.no_grad():
+                    output = model(dp_pp)
+                
+                # Calculate metrics
+                metrics = calculate_metrics(output, dp_pp_IDEAL,
+                                         calculate_psnr=calculate_psnr,
+                                         calculate_ssim=calculate_ssim,
+                                         calculate_xcorr=calculate_xcorr,
+                                         calculate_peaks=calculate_peaks)
+                
+                # Update statistics
+                if calculate_psnr and 'psnr' in metrics:
+                    stats[model_key]['psnr_sum'] += metrics['psnr']
+                if calculate_ssim and 'ssim' in metrics:
+                    stats[model_key]['ssim_sum'] += metrics['ssim']
+                if calculate_xcorr and 'xcorr' in metrics:
+                    stats[model_key]['xcorr_sum'] += metrics['xcorr']
+                if calculate_peaks:
+                    if 'avg_peak_dist' in metrics:
+                        stats[model_key]['peak_dist_sum'] += metrics['avg_peak_dist']
+                    if 'fwhm_diff' in metrics:
+                        stats[model_key]['fwhm_diff_sum'] += metrics['fwhm_diff']
+                    if 'num_peaks2' in metrics:  # ideal peaks
+                        stats[model_key]['total_peaks_ideal'] += metrics['num_peaks2']
+                        # Count matched peaks (those within distance threshold)
+                        ideal_peaks, _ = find_peaks_and_fwhm(dp_pp_IDEAL.squeeze().cpu().numpy(), sigma=peak_sigma)
+                        output_peaks, _ = find_peaks_and_fwhm(output.squeeze().cpu().numpy(), sigma=peak_sigma)
+                        matched = 0
+                        for ideal_peak in ideal_peaks:
+                            min_dist = float('inf')
+                            for output_peak in output_peaks:
+                                dist = np.sqrt((ideal_peak[0]-output_peak[0])**2 + (ideal_peak[1]-output_peak[1])**2)
+                                min_dist = min(min_dist, dist)
+                            if min_dist < 5:  # Same threshold as in visualization
+                                matched += 1
+                        stats[model_key]['total_peaks_matched'] += matched
+                
+                stats[model_key]['pattern_count'] += 1
+    
+    # Calculate averages and create final statistics
+    final_stats = {}
+    for model_key, model_stats in stats.items():
+        count = model_stats['pattern_count']
+        if count > 0:
+            final_stats[model_key] = {
+                'avg_psnr': model_stats['psnr_sum'] / count,
+                'avg_ssim': model_stats['ssim_sum'] / count,
+                'avg_xcorr': model_stats['xcorr_sum'] / count,
+                'avg_peak_dist': model_stats['peak_dist_sum'] / count,
+                'avg_fwhm_diff': model_stats['fwhm_diff_sum'] / count,
+                'peak_detection_rate': model_stats['total_peaks_matched'] / model_stats['total_peaks_ideal'] if model_stats['total_peaks_ideal'] > 0 else 0,
+                'total_peaks_matched': model_stats['total_peaks_matched'],
+                'total_peaks_ideal': model_stats['total_peaks_ideal'],
+                'patterns_processed': count
+            }
+    
+    return final_stats
+
+def group_stats_by_model_type(stats: Dict[str, Dict[str, float]]) -> Dict[str, Dict[str, float]]:
+    """
+    Group statistics by model type (L1/L2/pearson, Unet/no_Unet), combining iterations.
+    
+    Args:
+        stats (Dict[str, Dict[str, float]]): Dictionary of statistics per model
+        
+    Returns:
+        Dict[str, Dict[str, float]]: Dictionary of grouped statistics per model type
+    """
+    grouped_stats = {}
+    
+    for model_key, metrics in stats.items():
+        # Extract model type (e.g., 'L1_Unet', 'L2_no_Unet', etc.)
+        model_type = '_'.join(model_key.split('_')[:-1])  # Remove iteration number
+        
+        if model_type not in grouped_stats:
+            grouped_stats[model_type] = {
+                'avg_psnr': [],
+                'avg_ssim': [],
+                'avg_xcorr': [],
+                'avg_peak_dist': [],
+                'avg_fwhm_diff': [],
+                'peak_detection_rate': [],
+                'total_peaks_matched': 0,
+                'total_peaks_ideal': 0,
+                'total_patterns': 0
+            }
+        
+        # Append individual metrics to lists for later averaging
+        for metric in ['avg_psnr', 'avg_ssim', 'avg_xcorr', 'avg_peak_dist', 'avg_fwhm_diff', 'peak_detection_rate']:
+            if metric in metrics:
+                grouped_stats[model_type][metric].append(metrics[metric])
+        
+        # Sum up total peaks and patterns
+        grouped_stats[model_type]['total_peaks_matched'] += metrics['total_peaks_matched']
+        grouped_stats[model_type]['total_peaks_ideal'] += metrics['total_peaks_ideal']
+        grouped_stats[model_type]['total_patterns'] += metrics['patterns_processed']
+    
+    # Calculate averages for each model type
+    final_grouped_stats = {}
+    for model_type, metrics in grouped_stats.items():
+        final_grouped_stats[model_type] = {
+            'avg_psnr': np.mean(metrics['avg_psnr']) if metrics['avg_psnr'] else 0,
+            'avg_ssim': np.mean(metrics['avg_ssim']) if metrics['avg_ssim'] else 0,
+            'avg_xcorr': np.mean(metrics['avg_xcorr']) if metrics['avg_xcorr'] else 0,
+            'avg_peak_dist': np.mean(metrics['avg_peak_dist']) if metrics['avg_peak_dist'] else 0,
+            'avg_fwhm_diff': np.mean(metrics['avg_fwhm_diff']) if metrics['avg_fwhm_diff'] else 0,
+            'peak_detection_rate': metrics['total_peaks_matched'] / metrics['total_peaks_ideal'] if metrics['total_peaks_ideal'] > 0 else 0,
+            'total_peaks_matched': metrics['total_peaks_matched'],
+            'total_peaks_ideal': metrics['total_peaks_ideal'],
+            'total_patterns': metrics['total_patterns']
+        }
+    
+    return final_grouped_stats
+
+def print_cumulative_stats(stats: Dict[str, Dict[str, float]], sort_by: str = 'avg_ssim', group_by_model: bool = True):
+    """
+    Print cumulative statistics in a formatted table, sorted by a specified metric.
+    Can group statistics by model type.
+    
+    Args:
+        stats (Dict[str, Dict[str, float]]): Dictionary of statistics per model
+        sort_by (str): Metric to sort by
+        group_by_model (bool): Whether to group statistics by model type
+    """
+    if group_by_model:
+        stats = group_stats_by_model_type(stats)
+    
+    # Convert to DataFrame for easier formatting
+    rows = []
+    for model, metrics in stats.items():
+        row = {'Model': model}
+        row.update(metrics)
+        rows.append(row)
+    
+    df = pd.DataFrame(rows)
+    df = df.sort_values(by=sort_by, ascending=False)
+    
+    # Format the metrics for better readability
+    formatted_df = df.copy()
+    for col in df.columns:
+        if col == 'Model':
+            continue
+        if col in ['total_peaks_matched', 'total_peaks_ideal', 'total_patterns']:
+            formatted_df[col] = df[col].map(lambda x: f"{int(x):,}")
+        else:
+            formatted_df[col] = df[col].map(lambda x: f"{x:.4f}")
+    
+    # Print formatted table with a title indicating grouping
+    print("\nCumulative Statistics {} (sorted by {}):\n".format(
+        "Grouped by Model Type" if group_by_model else "Per Model and Iteration",
+        sort_by
+    ))
+    print(formatted_df.to_string())
+    
+    # Print summary statistics
+    if group_by_model:
+        print("\nSummary:")
+        print(f"Total number of model types: {len(df)}")
+        print(f"Total patterns processed: {df['total_patterns'].astype(int).sum():,}")
+        print(f"Total peaks detected: {df['total_peaks_matched'].astype(int).sum():,} / {df['total_peaks_ideal'].astype(int).sum():,}")
+        print(f"Overall peak detection rate: {df['total_peaks_matched'].astype(int).sum() / df['total_peaks_ideal'].astype(int).sum():.4f}")
+
+# Example usage:
+# indices_list = [(2,1,1), (2,1,2), (2,2,1)]  # Add your indices here
+# stats = calculate_cumulative_stats(model_configs, indices_list)
+# print_cumulative_stats(stats, sort_by='peak_detection_rate')
+
 #%%
 # Example usage:
 model_configs = {
-    'iterations': [2, 10, 25, 50, 100, 500],
+    'iterations': [500],#[2, 10, 25, 50, 100, 500],
     'models': {
         'L1_no_Unet': 'best_model_ZCB_9_no_Unet_epoch_{}.pth',
         'L1_Unet': 'best_model_ZCB_9_Unet_epoch_{}.pth',
@@ -481,15 +782,18 @@ model_configs = {
         #'pearson_Unet': 'best_model_ZCB_9_31_Unet_epoch_{}_pearson_loss.pth'
     }
 }
-
+#%%
 # Load the input data
 mask = np.load('/home/beams/PTYCHOSAXS/deconvolutionNN/data/mask/mask_ZCB_9_3D.npy')
 ind=random.randint(0,10800)
-ind=4111#9375#338#5840
+ind=4111#8370#2362#8370#4111#9375#338#5840
 print(f'Using index {ind}')
 # preprocess diffraction pattern
-dp_pp,_,_ = ptNN_U.preprocess_ZCB_9(np.load(f'/net/micdata/data2/12IDC/ptychosaxs/data/diff_sim/32/output_hanning_conv_{ind:05d}.npz')['convDP'],mask)
-dp_pp_IDEAL,_,_ = ptNN_U.preprocess_ZCB_9(np.load(f'/net/micdata/data2/12IDC/ptychosaxs/data/diff_sim/32/output_hanning_conv_{ind:05d}.npz')['pinholeDP_extra_conv'],mask=np.ones(dp_pp[0][0].shape))
+#dp_pp,_,_ = ptNN_U.preprocess_ZCB_9(np.load(f'/net/micdata/data2/12IDC/ptychosaxs/data/diff_sim/32/output_hanning_conv_{ind:05d}.npz')['convDP'],mask)
+#dp_pp_IDEAL,_,_ = ptNN_U.preprocess_ZCB_9(np.load(f'/net/micdata/data2/12IDC/ptychosaxs/data/diff_sim/32/output_hanning_conv_{ind:05d}.npz')['pinholeDP_extra_conv'],mask=np.ones(dp_pp[0][0].shape))
+hr,kr,lr=2,1,1
+dp_pp,_,_ = ptNN_U.preprocess_ZCB_9(np.load(f'/net/micdata/data2/12IDC/ptychosaxs/data/diff_sim/lattice_ls400_gs1024_lsp6_r3.0_typeSC/output_hanning_conv_{hr}_{kr}_{lr}_00005.npz')['convDP'],mask)
+dp_pp_IDEAL,_,_ = ptNN_U.preprocess_ZCB_9(np.load(f'/net/micdata/data2/12IDC/ptychosaxs/data/diff_sim/lattice_ls400_gs1024_lsp6_r3.0_typeSC/output_hanning_conv_{hr}_{kr}_{lr}_00005.npz')['pinholeDP_extra_conv'],mask=np.ones(dp_pp[0][0].shape))
 
 
 # #Experimental data
@@ -542,4 +846,36 @@ fig = create_comparison_grid_from_config(
     calculate_xcorr=False,
     calculate_peaks=True
 )
+# %%
+
+
+
+# Define your list of indices
+indices_list = [
+    (1,0,0),
+    (1,1,1),
+    (2,1,1),
+    (3,1,0),
+    (3,2,1),
+    (2,0,0)
+    # ... add more combinations as needed
+]
+
+# Calculate cumulative stats
+stats = calculate_cumulative_stats(
+    model_configs=model_configs,
+    indices_list=indices_list,
+    base_path="/net/micdata/data2/12IDC/ptychosaxs/models/ZCB_9_3D/",
+    calculate_psnr=True,
+    calculate_ssim=True,
+    calculate_xcorr=False,
+    calculate_peaks=True,
+    peak_sigma=1.0,
+    central_only=False
+)
+
+# Print stats sorted by different metrics
+print_cumulative_stats(stats, sort_by='avg_ssim')  # Sort by SSIM
+print_cumulative_stats(stats, sort_by='peak_detection_rate')  # Sort by peak detection rate
+print_cumulative_stats(stats, sort_by='avg_psnr')  # Sort by PSNR
 # %%
