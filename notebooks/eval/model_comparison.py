@@ -762,10 +762,145 @@ def print_cumulative_stats(stats: Dict[str, Dict[str, float]], sort_by: str = 'a
         print(f"Total peaks detected: {df['total_peaks_matched'].astype(int).sum():,} / {df['total_peaks_ideal'].astype(int).sum():,}")
         print(f"Overall peak detection rate: {df['total_peaks_matched'].astype(int).sum() / df['total_peaks_ideal'].astype(int).sum():.4f}")
 
+def create_stats_table_figure(stats: Dict[str, Dict[str, float]], 
+                           sort_by: str = 'avg_ssim',
+                           group_by_model: bool = True,
+                           figsize: Tuple[float, float] = (12, 8)) -> plt.Figure:
+    """
+    Create a formatted table figure from the statistics.
+    
+    Args:
+        stats (Dict[str, Dict[str, float]]): Dictionary of statistics per model
+        sort_by (str): Metric to sort by
+        group_by_model (bool): Whether to group statistics by model type
+        figsize (Tuple[float, float]): Figure size in inches
+        
+    Returns:
+        plt.Figure: The created figure
+    """
+    if group_by_model:
+        stats = group_stats_by_model_type(stats)
+    
+    # Convert to DataFrame and sort
+    rows = []
+    for model, metrics in stats.items():
+        row = {'Model': model}
+        row.update(metrics)
+        rows.append(row)
+    
+    df = pd.DataFrame(rows)
+    df = df.sort_values(by=sort_by, ascending=False)
+    
+    # Select and rename columns for display
+    columns_to_show = [
+        'Model',
+        'avg_psnr',
+        'avg_ssim',
+        'peak_detection_rate',
+        'avg_peak_dist',
+        'avg_fwhm_diff',
+        'total_peaks_matched',
+        'total_peaks_ideal',
+        'pattern_count' if 'pattern_count' in df.columns else 'total_patterns'
+    ]
+    
+    column_labels = {
+        'Model': 'Model Type',
+        'avg_psnr': 'PSNR (dB)',
+        'avg_ssim': 'SSIM',
+        'peak_detection_rate': 'Peak Detection Rate',
+        'avg_peak_dist': 'Avg Peak Distance',
+        'avg_fwhm_diff': 'Avg FWHM Diff',
+        'total_peaks_matched': 'Peaks Matched',
+        'total_peaks_ideal': 'Total Peaks',
+        'pattern_count': 'Patterns',
+        'total_patterns': 'Patterns'
+    }
+    
+    # Create figure and axis
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.axis('tight')
+    ax.axis('off')
+    
+    # Format the data
+    display_df = df[columns_to_show].copy()
+    
+    # Format numeric columns
+    for col in display_df.columns:
+        if col == 'Model':
+            continue
+        if col in ['total_peaks_matched', 'total_peaks_ideal', 'pattern_count', 'total_patterns']:
+            display_df[col] = display_df[col].map(lambda x: f"{int(x):,}")
+        elif col in ['avg_psnr', 'avg_peak_dist', 'avg_fwhm_diff']:
+            display_df[col] = display_df[col].map(lambda x: f"{x:.2f}")
+        else:
+            display_df[col] = display_df[col].map(lambda x: f"{x:.4f}")
+    
+    # Create table
+    table = ax.table(
+        cellText=display_df.values,
+        colLabels=[column_labels[col] for col in columns_to_show],
+        cellLoc='center',
+        loc='center',
+        colColours=['#E6E6E6'] * len(columns_to_show)
+    )
+    
+    # Style the table
+    table.auto_set_font_size(False)
+    table.set_fontsize(9)
+    table.scale(1.2, 1.8)
+    
+    # Adjust cell widths based on content
+    for (row, col), cell in table.get_celld().items():
+        if col == 0:  # Model column
+            cell.set_width(0.2)
+        else:
+            cell.set_width(0.1)
+    
+    # Add title
+    title = f"Model Performance Statistics (Sorted by {column_labels[sort_by]})"
+    if group_by_model:
+        title += " - Grouped by Model Type"
+    plt.title(title, pad=20, size=12, weight='bold')
+    
+    # Add summary statistics as text below the table
+    if group_by_model:
+        patterns_col = 'pattern_count' if 'pattern_count' in df.columns else 'total_patterns'
+        summary_text = [
+            f"Total number of model types: {len(df)}",
+            f"Total patterns processed: {df[patterns_col].astype(int).sum():,}",
+            f"Total peaks detected: {df['total_peaks_matched'].astype(int).sum():,} / {df['total_peaks_ideal'].astype(int).sum():,}",
+            f"Overall peak detection rate: {df['total_peaks_matched'].astype(int).sum() / df['total_peaks_ideal'].astype(int).sum():.4f}"
+        ]
+        plt.figtext(0.1, 0.02, '\n'.join(summary_text), fontsize=9, va='bottom')
+    
+    plt.tight_layout()
+    return fig
+
+def save_stats_table(stats: Dict[str, Dict[str, float]], 
+                    save_path: str,
+                    sort_by: str = 'avg_ssim',
+                    group_by_model: bool = True,
+                    figsize: Tuple[float, float] = (12, 8)):
+    """
+    Create and save a formatted table of statistics as a figure.
+    
+    Args:
+        stats (Dict[str, Dict[str, float]]): Dictionary of statistics per model
+        save_path (str): Path where to save the figure
+        sort_by (str): Metric to sort by
+        group_by_model (bool): Whether to group statistics by model type
+        figsize (Tuple[float, float]): Figure size in inches
+    """
+    fig = create_stats_table_figure(stats, sort_by, group_by_model, figsize)
+    fig.savefig(save_path, bbox_inches='tight', dpi=300)
+    plt.close(fig)
+
 # Example usage:
-# indices_list = [(2,1,1), (2,1,2), (2,2,1)]  # Add your indices here
-# stats = calculate_cumulative_stats(model_configs, indices_list)
-# print_cumulative_stats(stats, sort_by='peak_detection_rate')
+# save_stats_table(stats, 'model_stats.pdf', sort_by='peak_detection_rate')
+# # Or to try different sortings:
+# for metric in ['avg_ssim', 'avg_psnr', 'peak_detection_rate']:
+#     save_stats_table(stats, f'model_stats_{metric}.pdf', sort_by=metric)
 
 #%%
 # Example usage:
@@ -785,6 +920,8 @@ model_configs = {
 #%%
 # Load the input data
 mask = np.load('/home/beams/PTYCHOSAXS/deconvolutionNN/data/mask/mask_ZCB_9_3D.npy')
+
+#%%
 ind=random.randint(0,10800)
 ind=4111#8370#2362#8370#4111#9375#338#5840
 print(f'Using index {ind}')
@@ -795,6 +932,7 @@ hr,kr,lr=2,1,1
 dp_pp,_,_ = ptNN_U.preprocess_ZCB_9(np.load(f'/net/micdata/data2/12IDC/ptychosaxs/data/diff_sim/lattice_ls400_gs1024_lsp6_r3.0_typeSC/output_hanning_conv_{hr}_{kr}_{lr}_00005.npz')['convDP'],mask)
 dp_pp_IDEAL,_,_ = ptNN_U.preprocess_ZCB_9(np.load(f'/net/micdata/data2/12IDC/ptychosaxs/data/diff_sim/lattice_ls400_gs1024_lsp6_r3.0_typeSC/output_hanning_conv_{hr}_{kr}_{lr}_00005.npz')['pinholeDP_extra_conv'],mask=np.ones(dp_pp[0][0].shape))
 
+#%%
 
 # #Experimental data
 # scan_name = 'ZCB_9_3D'
@@ -846,10 +984,11 @@ fig = create_comparison_grid_from_config(
     calculate_xcorr=False,
     calculate_peaks=True
 )
+
+
+
+
 # %%
-
-
-
 # Define your list of indices
 indices_list = [
     (1,0,0),
@@ -871,11 +1010,18 @@ stats = calculate_cumulative_stats(
     calculate_xcorr=False,
     calculate_peaks=True,
     peak_sigma=1.0,
-    central_only=False
+    central_only=True
 )
 
 # Print stats sorted by different metrics
 print_cumulative_stats(stats, sort_by='avg_ssim')  # Sort by SSIM
 print_cumulative_stats(stats, sort_by='peak_detection_rate')  # Sort by peak detection rate
 print_cumulative_stats(stats, sort_by='avg_psnr')  # Sort by PSNR
+
+
+
+
+# %%
+create_stats_table_figure(stats, sort_by='peak_detection_rate', group_by_model=True)
+plt.show()
 # %%
