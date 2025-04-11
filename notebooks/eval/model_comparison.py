@@ -18,6 +18,7 @@ importlib.reload(ptNN_U)
 import random
 # Add the models directory to the path
 sys.path.append(os.path.abspath(os.path.join(os.getcwd(), '../../src/models/')))
+from tqdm import tqdm
 
 def normalize_image(img: torch.Tensor) -> torch.Tensor:
     """
@@ -63,7 +64,7 @@ def calculate_normalized_cross_correlation(img1: np.ndarray, img2: np.ndarray) -
     # Return maximum correlation value
     return np.max(corr)
 
-def find_peaks_and_fwhm(image: np.ndarray, threshold: float = 0.35, sigma: float = 1.0) -> Tuple[List[Tuple[float, float]], List[float]]:
+def find_peaks_and_fwhm(image: np.ndarray, threshold: float = 0.265, sigma: float = 0.714) -> Tuple[List[Tuple[float, float]], List[float]]:
     """
     Find peaks and their FWHM in a 2D image, including peaks at edges.
     
@@ -156,12 +157,129 @@ def find_peaks_and_fwhm(image: np.ndarray, threshold: float = 0.35, sigma: float
     
     return peaks, fwhm_values
 
+def calculate_peak_sensitivity_metrics(img1: np.ndarray, 
+                                  img2: np.ndarray,
+                                  sigma_range: List[float] = [0.5, 1.0, 1.5, 2.0],
+                                  threshold_range: List[float] = [0.1, 0.2, 0.3, 0.4],
+                                  distance_threshold: float = 5.0) -> Dict[str, float]:
+    """
+    Calculate comprehensive peak detection metrics across different peak finder parameters.
+    
+    Args:
+        img1 (np.ndarray): First image (model output)
+        img2 (np.ndarray): Second image (ground truth)
+        sigma_range (List[float]): Range of sigma values for Gaussian smoothing
+        threshold_range (List[float]): Range of threshold values for peak detection
+        distance_threshold (float): Maximum distance for peaks to be considered matched
+        
+    Returns:
+        Dict[str, float]: Dictionary of peak sensitivity metrics
+    """
+    metrics = {
+        'optimal_sigma': 0.0,
+        'optimal_threshold': 0.0,
+        'max_f1_score': 0.0,
+        'peak_position_stability': 0.0,
+        'peak_count_stability': 0.0,
+        'parameter_sensitivity': 0.0,
+        'false_positive_rate': 0.0,
+        'false_negative_rate': 0.0,
+        'peak_intensity_correlation': 0.0,
+        'peak_shape_consistency': 0.0
+    }
+    
+    # Store results for each parameter combination
+    results = []
+    peak_positions_all = []
+    peak_counts = []
+    
+    # Calculate ground truth peaks with middle parameters
+    mid_sigma = np.median(sigma_range)
+    mid_threshold = np.median(threshold_range)
+    gt_peaks, gt_fwhm = find_peaks_and_fwhm(img2, threshold=mid_threshold, sigma=mid_sigma)
+    
+    # Test all parameter combinations
+    for sigma in tqdm(sigma_range):
+        for threshold in tqdm(threshold_range):
+            # Find peaks with current parameters
+            peaks, fwhm = find_peaks_and_fwhm(img1, threshold=threshold, sigma=sigma)
+            peak_positions_all.extend(peaks)
+            peak_counts.append(len(peaks))
+            
+            # Calculate matching metrics
+            matched = 0
+            false_positives = 0
+            peak_intensities1 = []
+            peak_intensities2 = []
+            
+            for peak in peaks:
+                # Find closest ground truth peak
+                min_dist = float('inf')
+                closest_gt_peak = None
+                
+                for gt_peak in gt_peaks:
+                    dist = np.sqrt((peak[0]-gt_peak[0])**2 + (peak[1]-gt_peak[1])**2)
+                    if dist < min_dist:
+                        min_dist = dist
+                        closest_gt_peak = gt_peak
+                
+                if min_dist <= distance_threshold:
+                    matched += 1
+                    peak_intensities1.append(img1[peak[0], peak[1]])
+                    peak_intensities2.append(img2[closest_gt_peak[0], closest_gt_peak[1]])
+                else:
+                    false_positives += 1
+            
+            # Calculate F1 score
+            precision = matched / len(peaks) if peaks else 0
+            recall = matched / len(gt_peaks) if gt_peaks else 0
+            f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
+            
+            results.append({
+                'sigma': sigma,
+                'threshold': threshold,
+                'f1_score': f1,
+                'matched': matched,
+                'false_positives': false_positives,
+                'false_negatives': len(gt_peaks) - matched,
+                'peak_count': len(peaks)
+            })
+            
+            # Update best parameters if this combination gives better F1 score
+            if f1 > metrics['max_f1_score']:
+                metrics['max_f1_score'] = f1
+                metrics['optimal_sigma'] = sigma
+                metrics['optimal_threshold'] = threshold
+    
+    # Calculate stability metrics
+    if peak_positions_all:
+        # Peak position stability (standard deviation of peak positions across parameters)
+        peak_positions_array = np.array(peak_positions_all)
+        metrics['peak_position_stability'] = 1.0 / (np.std(peak_positions_array[:, 0]) + 
+                                                  np.std(peak_positions_array[:, 1]) + 1e-6)
+        
+        # Peak count stability (coefficient of variation of peak counts)
+        metrics['peak_count_stability'] = 1.0 / (np.std(peak_counts) / np.mean(peak_counts) + 1e-6)
+    
+    # Calculate parameter sensitivity
+    f1_scores = [r['f1_score'] for r in results]
+    metrics['parameter_sensitivity'] = np.std(f1_scores) / (np.mean(f1_scores) + 1e-6)
+    
+    # Calculate average false positive and negative rates
+    metrics['false_positive_rate'] = np.mean([r['false_positives'] / r['peak_count'] 
+                                            if r['peak_count'] > 0 else 0 for r in results])
+    metrics['false_negative_rate'] = np.mean([r['false_negatives'] / len(gt_peaks) 
+                                            if gt_peaks else 0 for r in results])
+    
+    return metrics
+
 def calculate_metrics(img1: torch.Tensor, 
                      img2: torch.Tensor,
                      calculate_psnr: bool = True,
                      calculate_ssim: bool = True,
                      calculate_xcorr: bool = False,
-                     calculate_peaks: bool = True) -> Dict[str, float]:
+                     calculate_peaks: bool = True,
+                     calculate_peak_sensitivity: bool = False) -> Dict[str, float]:
     """
     Calculate selected metrics between two images.
     Images are normalized before metric calculation.
@@ -173,6 +291,7 @@ def calculate_metrics(img1: torch.Tensor,
         calculate_ssim (bool): Whether to calculate SSIM
         calculate_xcorr (bool): Whether to calculate cross-correlation
         calculate_peaks (bool): Whether to calculate peak metrics
+        calculate_peak_sensitivity (bool): Whether to calculate peak sensitivity metrics
         
     Returns:
         Dict[str, float]: Dictionary of calculated metrics
@@ -232,6 +351,27 @@ def calculate_metrics(img1: torch.Tensor,
             metrics['num_peaks2'] = len(peaks2)
             if fwhm_diffs:  # Only calculate if we found matching peaks
                 metrics['fwhm_diff'] = np.mean(fwhm_diffs)
+    
+    if calculate_peak_sensitivity:
+        # Calculate peak sensitivity metrics
+        sensitivity_metrics = calculate_peak_sensitivity_metrics(
+            img1_np, 
+            img2_np,
+            sigma_range=[0.5, 1.0, 1.5, 2.0],
+            threshold_range=[0.1, 0.2, 0.3, 0.4]
+        )
+        
+        # Add sensitivity metrics to the output
+        metrics.update({
+            'optimal_sigma': sensitivity_metrics['optimal_sigma'],
+            'optimal_threshold': sensitivity_metrics['optimal_threshold'],
+            'max_f1_score': sensitivity_metrics['max_f1_score'],
+            'peak_position_stability': sensitivity_metrics['peak_position_stability'],
+            'peak_count_stability': sensitivity_metrics['peak_count_stability'],
+            'parameter_sensitivity': sensitivity_metrics['parameter_sensitivity'],
+            'false_positive_rate': sensitivity_metrics['false_positive_rate'],
+            'false_negative_rate': sensitivity_metrics['false_negative_rate']
+        })
     
     return metrics
 
@@ -521,6 +661,7 @@ def calculate_cumulative_stats(model_configs: Dict,
                            calculate_ssim: bool = True,
                            calculate_xcorr: bool = False,
                            calculate_peaks: bool = True,
+                           calculate_peak_sensitivity: bool = False,
                            peak_sigma: float = 1.0,
                            central_only: bool = True) -> Dict[str, Dict[str, float]]:
     """
@@ -536,6 +677,7 @@ def calculate_cumulative_stats(model_configs: Dict,
         calculate_ssim (bool): Whether to calculate SSIM
         calculate_xcorr (bool): Whether to calculate cross-correlation
         calculate_peaks (bool): Whether to calculate peak metrics
+        calculate_peak_sensitivity (bool): Whether to calculate peak sensitivity metrics
         peak_sigma (float): Sigma for Gaussian smoothing in peak detection
         central_only (bool): If True, only process central pattern (num=5), 
                            if False, process all patterns (num=1-9)
@@ -569,7 +711,16 @@ def calculate_cumulative_stats(model_configs: Dict,
             'fwhm_diff_sum': 0.0,
             'total_peaks_ideal': 0,
             'total_peaks_matched': 0,
-            'pattern_count': 0
+            'pattern_count': 0,
+            # Initialize peak sensitivity metrics if enabled
+            'optimal_sigma_sum': 0.0,
+            'optimal_threshold_sum': 0.0,
+            'max_f1_score_sum': 0.0,
+            'peak_position_stability_sum': 0.0,
+            'peak_count_stability_sum': 0.0,
+            'parameter_sensitivity_sum': 0.0,
+            'false_positive_rate_sum': 0.0,
+            'false_negative_rate_sum': 0.0
         }
     
     # Process each pattern
@@ -608,7 +759,8 @@ def calculate_cumulative_stats(model_configs: Dict,
                                          calculate_psnr=calculate_psnr,
                                          calculate_ssim=calculate_ssim,
                                          calculate_xcorr=calculate_xcorr,
-                                         calculate_peaks=calculate_peaks)
+                                         calculate_peaks=calculate_peaks,
+                                         calculate_peak_sensitivity=calculate_peak_sensitivity)
                 
                 # Update statistics
                 if calculate_psnr and 'psnr' in metrics:
@@ -637,6 +789,17 @@ def calculate_cumulative_stats(model_configs: Dict,
                                 matched += 1
                         stats[model_key]['total_peaks_matched'] += matched
                 
+                if calculate_peak_sensitivity:
+                    # Add peak sensitivity metrics
+                    stats[model_key]['optimal_sigma_sum'] += metrics['optimal_sigma']
+                    stats[model_key]['optimal_threshold_sum'] += metrics['optimal_threshold']
+                    stats[model_key]['max_f1_score_sum'] += metrics['max_f1_score']
+                    stats[model_key]['peak_position_stability_sum'] += metrics['peak_position_stability']
+                    stats[model_key]['peak_count_stability_sum'] += metrics['peak_count_stability']
+                    stats[model_key]['parameter_sensitivity_sum'] += metrics['parameter_sensitivity']
+                    stats[model_key]['false_positive_rate_sum'] += metrics['false_positive_rate']
+                    stats[model_key]['false_negative_rate_sum'] += metrics['false_negative_rate']
+                
                 stats[model_key]['pattern_count'] += 1
     
     # Calculate averages and create final statistics
@@ -655,6 +818,18 @@ def calculate_cumulative_stats(model_configs: Dict,
                 'total_peaks_ideal': model_stats['total_peaks_ideal'],
                 'patterns_processed': count
             }
+            
+            if calculate_peak_sensitivity:
+                final_stats[model_key].update({
+                    'avg_optimal_sigma': model_stats['optimal_sigma_sum'] / count,
+                    'avg_optimal_threshold': model_stats['optimal_threshold_sum'] / count,
+                    'avg_max_f1_score': model_stats['max_f1_score_sum'] / count,
+                    'avg_peak_position_stability': model_stats['peak_position_stability_sum'] / count,
+                    'avg_peak_count_stability': model_stats['peak_count_stability_sum'] / count,
+                    'avg_parameter_sensitivity': model_stats['parameter_sensitivity_sum'] / count,
+                    'avg_false_positive_rate': model_stats['false_positive_rate_sum'] / count,
+                    'avg_false_negative_rate': model_stats['false_negative_rate_sum'] / count
+                })
     
     return final_stats
 
@@ -765,7 +940,7 @@ def print_cumulative_stats(stats: Dict[str, Dict[str, float]], sort_by: str = 'a
 def create_stats_table_figure(stats: Dict[str, Dict[str, float]], 
                            sort_by: str = 'avg_ssim',
                            group_by_model: bool = True,
-                           figsize: Tuple[float, float] = (12, 8)) -> plt.Figure:
+                           figsize: Tuple[float, float] = (15, 5)) -> plt.Figure:
     """
     Create a formatted table figure from the statistics.
     
@@ -861,7 +1036,7 @@ def create_stats_table_figure(stats: Dict[str, Dict[str, float]],
     title = f"Model Performance Statistics (Sorted by {column_labels[sort_by]})"
     if group_by_model:
         title += " - Grouped by Model Type"
-    plt.title(title, pad=20, size=12, weight='bold')
+    #plt.title(title, pad=20, size=12, weight='bold')
     
     # Add summary statistics as text below the table
     if group_by_model:
@@ -872,7 +1047,7 @@ def create_stats_table_figure(stats: Dict[str, Dict[str, float]],
             f"Total peaks detected: {df['total_peaks_matched'].astype(int).sum():,} / {df['total_peaks_ideal'].astype(int).sum():,}",
             f"Overall peak detection rate: {df['total_peaks_matched'].astype(int).sum() / df['total_peaks_ideal'].astype(int).sum():.4f}"
         ]
-        plt.figtext(0.1, 0.02, '\n'.join(summary_text), fontsize=9, va='bottom')
+        #plt.figtext(0.1, 0.02, '\n'.join(summary_text), fontsize=9, va='bottom')
     
     plt.tight_layout()
     return fig
@@ -881,7 +1056,7 @@ def save_stats_table(stats: Dict[str, Dict[str, float]],
                     save_path: str,
                     sort_by: str = 'avg_ssim',
                     group_by_model: bool = True,
-                    figsize: Tuple[float, float] = (12, 8)):
+                    figsize: Tuple[float, float] = (15, 5)):
     """
     Create and save a formatted table of statistics as a figure.
     
@@ -928,9 +1103,9 @@ print(f'Using index {ind}')
 # preprocess diffraction pattern
 #dp_pp,_,_ = ptNN_U.preprocess_ZCB_9(np.load(f'/net/micdata/data2/12IDC/ptychosaxs/data/diff_sim/32/output_hanning_conv_{ind:05d}.npz')['convDP'],mask)
 #dp_pp_IDEAL,_,_ = ptNN_U.preprocess_ZCB_9(np.load(f'/net/micdata/data2/12IDC/ptychosaxs/data/diff_sim/32/output_hanning_conv_{ind:05d}.npz')['pinholeDP_extra_conv'],mask=np.ones(dp_pp[0][0].shape))
-hr,kr,lr=2,1,1
-dp_pp,_,_ = ptNN_U.preprocess_ZCB_9(np.load(f'/net/micdata/data2/12IDC/ptychosaxs/data/diff_sim/lattice_ls400_gs1024_lsp6_r3.0_typeSC/output_hanning_conv_{hr}_{kr}_{lr}_00005.npz')['convDP'],mask)
-dp_pp_IDEAL,_,_ = ptNN_U.preprocess_ZCB_9(np.load(f'/net/micdata/data2/12IDC/ptychosaxs/data/diff_sim/lattice_ls400_gs1024_lsp6_r3.0_typeSC/output_hanning_conv_{hr}_{kr}_{lr}_00005.npz')['pinholeDP_extra_conv'],mask=np.ones(dp_pp[0][0].shape))
+hr,kr,lr=3,1,0
+dp_pp,_,_ = ptNN_U.preprocess_ZCB_9(np.load(f'/net/micdata/data2/12IDC/ptychosaxs/data/diff_sim/lattice_ls400_gs1024_lsp6_r3.0_typeSC/output_hanning_conv_{hr}_{kr}_{lr}_00006.npz')['convDP'],mask)
+dp_pp_IDEAL,_,_ = ptNN_U.preprocess_ZCB_9(np.load(f'/net/micdata/data2/12IDC/ptychosaxs/data/diff_sim/lattice_ls400_gs1024_lsp6_r3.0_typeSC/output_hanning_conv_{hr}_{kr}_{lr}_00006.npz')['pinholeDP_extra_conv'],mask=np.ones(dp_pp[0][0].shape))
 
 #%%
 
@@ -985,8 +1160,8 @@ fig = create_comparison_grid_from_config(
     calculate_peaks=True
 )
 
-
-
+#%%
+save_comparison_grid(fig, 'comparison_grid.pdf')
 
 # %%
 # Define your list of indices
@@ -996,7 +1171,8 @@ indices_list = [
     (2,1,1),
     (3,1,0),
     (3,2,1),
-    (2,0,0)
+    (2,0,0),
+    (2,2,0)
     # ... add more combinations as needed
 ]
 
@@ -1009,8 +1185,9 @@ stats = calculate_cumulative_stats(
     calculate_ssim=True,
     calculate_xcorr=False,
     calculate_peaks=True,
-    peak_sigma=1.0,
-    central_only=True
+    calculate_peak_sensitivity=False,
+    peak_sigma=0.714,
+    central_only=False
 )
 
 # Print stats sorted by different metrics
@@ -1025,3 +1202,4 @@ print_cumulative_stats(stats, sort_by='avg_psnr')  # Sort by PSNR
 create_stats_table_figure(stats, sort_by='peak_detection_rate', group_by_model=True)
 plt.show()
 # %%
+save_stats_table(stats, 'model_stats.pdf', sort_by='peak_detection_rate', group_by_model=True)
