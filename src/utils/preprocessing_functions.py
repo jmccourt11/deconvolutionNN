@@ -1,5 +1,110 @@
 import numpy as np
+import torch
 
+def create_waxs_mask(image_shape, box_size):
+    """
+    Create a mask to isolate the WAXS (frame-like) region.
+    Args:
+        image_shape (tuple): Shape of the input image (H, W).
+        box_size (int): Size of the central box to exclude.
+    Returns:
+        Tensor: Mask with 1s in the WAXS region and 0s in the central box.
+    """
+    h, w = image_shape
+    mask = torch.ones((h, w), dtype=torch.float32)
+    cx, cy = w // 2, h // 2  # Center coordinates
+    half_box = box_size // 2
+    mask[cy - half_box:cy + half_box, cx - half_box:cx + half_box] = 0  # Exclude center box
+    return mask
+
+def apply_waxs_mask(image, mask):
+    """
+    Apply the WAXS mask to isolate the outer region.
+    Args:
+        image (Tensor): Input image tensor [B, C, H, W].
+        mask (Tensor): WAXS mask [H, W].
+    Returns:
+        Tensor: Image with only the WAXS region retained.
+    """
+    return image * mask.unsqueeze(0).unsqueeze(0) 
+    
+def create_circular_waxs_mask(image_shape, radius):
+    """
+    Create a circular mask for the WAXS region.
+    Args:
+        image_shape (tuple): Shape of the input image (H, W).
+        radius (int): Radius of the central circular region to exclude.
+    Returns:
+        Tensor: Circular mask with 1s in the WAXS region and 0s in the central circle.
+    """
+    h, w = image_shape
+    y, x = torch.meshgrid(torch.arange(h), torch.arange(w), indexing="ij")
+    center_y, center_x = h // 2, w // 2  # Center coordinates
+    distance_from_center = torch.sqrt((x - center_x) ** 2 + (y - center_y) ** 2)
+    mask = (distance_from_center > radius).float()  # 1 outside the circle, 0 inside
+    return mask
+
+def create_circular_waxs_mask2(image, radius):
+    """
+    Create a circular mask for the WAXS region that sets the central region to the minimum value.
+    
+    Args:
+        image (Tensor or ndarray): Input image to be masked.
+        radius (int): Radius of the central circular region to modify.
+        
+    Returns:
+        Same type as input: Image with central circle set to minimum value.
+    """
+    # Handle both numpy arrays and PyTorch tensors
+    is_tensor = isinstance(image, torch.Tensor)
+    
+    if is_tensor:
+        h, w = image.shape[-2:]
+        y, x = torch.meshgrid(torch.arange(h), torch.arange(w), indexing="ij")
+        center_y, center_x = h // 2, w // 2
+        distance_from_center = torch.sqrt((x - center_x) ** 2 + (y - center_y) ** 2)
+        
+        # Find minimum value in the image
+        min_val = torch.min(image)
+        
+        # Create a copy of the image
+        masked_image = image.clone()
+        
+        # Set central region to minimum value
+        mask = (distance_from_center <= radius)
+        if len(image.shape) > 2:  # Handle batched images
+            # Expand mask dimensions to match image
+            for _ in range(len(image.shape) - 2):
+                mask = mask.unsqueeze(0)
+            # Apply to all channels/batches
+            masked_image = torch.where(mask, min_val, image)
+        else:
+            masked_image[mask] = min_val
+            
+    else:  # Numpy array
+        h, w = image.shape[-2:]
+        y, x = np.indices((h, w))
+        center_y, center_x = h // 2, w // 2
+        distance_from_center = np.sqrt((x - center_x) ** 2 + (y - center_y) ** 2)
+        
+        # Find minimum value in the image
+        min_val = np.min(image)
+        
+        # Create a copy of the image
+        masked_image = image.copy()
+        
+        # Set central region to minimum value
+        mask = (distance_from_center <= radius)
+        if len(image.shape) > 2:  # Handle batched images
+            # Expand mask dimensions to match image
+            for _ in range(len(image.shape) - 2):
+                mask = np.expand_dims(mask, axis=0)
+            # Apply to all channels/batches
+            masked_image = np.where(mask, min_val, image)
+        else:
+            masked_image[mask] = min_val
+    
+    return masked_image
 
 def replace_2d_array_values_by_row_indices(array, start, end):
     """

@@ -11,14 +11,16 @@ from matplotlib import colors
 from skimage.metrics import structural_similarity as ssim
 from scipy.signal import correlate2d, find_peaks
 from scipy.ndimage import gaussian_filter
+import random
+import importlib
+from tqdm import tqdm
+
 sys.path.append(os.path.abspath(os.path.join(os.getcwd(), '../../../NN/ptychosaxsNN/')))
 import utils.ptychosaxsNN_utils as ptNN_U
-import importlib
 importlib.reload(ptNN_U)
-import random
 # Add the models directory to the path
 sys.path.append(os.path.abspath(os.path.join(os.getcwd(), '../../src/models/')))
-from tqdm import tqdm
+
 
 def normalize_image(img: torch.Tensor) -> torch.Tensor:
     """
