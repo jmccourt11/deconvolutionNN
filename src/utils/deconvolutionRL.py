@@ -60,7 +60,7 @@ def RL_deconvblind(img,PSF,iterations,verbose=False,TV=False):
     
     #RL deconvolution iterations
     init_img = img
-    PSF_hat = self.flip180(PSF)
+    PSF_hat = flip180(PSF)#self.flip180(PSF)
     for i in range(iterations):
         if verbose:
             print('Iteration: {}'.format(i+1))
