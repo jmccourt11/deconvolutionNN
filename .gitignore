@@ -1,5 +1,6 @@
 *.npz
 *.npz
+src/utils/plots/*.png
 notebooks/eval/absorption_map_model_no_Unet_2.png
 notebooks/eval/absorption_map_model_no_Unet_10.png
 notebooks/eval/absorption_map_model_no_Unet_25.png
