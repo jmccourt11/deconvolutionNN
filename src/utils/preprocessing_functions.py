@@ -300,3 +300,35 @@ def scale_back(dp,scale_factor,constant):
     temp=dp*scale_factor + constant
     temp=10**(temp)
     return temp
+
+def create_circular_mask_zero_outside(image, radius=48):
+    """
+    Creates a circular mask at the center of the image where values outside the circle are set to zero.
+    
+    Args:
+        image (ndarray): Input image to be masked
+        radius (int): Radius of the circle to keep (values outside will be set to zero)
+        
+    Returns:
+        ndarray: Image with values outside the circle set to zero
+    """
+    # Get the dimensions of the image
+    h, w = image.shape[:2]
+
+    # Center
+    center_x, center_y = w // 2, h // 2
+    
+    # Create a grid of x and y coordinates
+    y, x = np.ogrid[:h, :w]
+    
+    # Calculate the distance from each pixel to the center
+    distance_from_center = np.sqrt((x - center_x) ** 2 + (y - center_y) ** 2)
+    
+    # Create the circular mask (True inside circle, False outside)
+    mask = distance_from_center <= radius
+    
+    # Create a copy of the image and set values outside circle to zero
+    masked_image = image.copy()
+    masked_image[~mask] = 0
+    
+    return masked_image
