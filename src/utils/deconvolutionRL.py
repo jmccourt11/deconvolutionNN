@@ -105,7 +105,6 @@ def roi(image):
     return result #return roi (cropped) image
     
 
-
 def plotter(images,labels,cmap='jet',log=False):
     # display n plots side by side
     n=len(images)
@@ -118,7 +117,8 @@ def plotter(images,labels,cmap='jet',log=False):
             ax[i].imshow(images[i])
         #ax[i].axis('off')
         ax[i].set_title(labels[i])
-    plt.show()
+    plt.tight_layout()
+    return fig
 
 def RL_deconvblind(img,PSF,iterations,verbose=False,TV=False):
     #Richardson Lucy (RL) algorithm for deconvoluting a measured image with a known point-spread-function image to return underlying object image

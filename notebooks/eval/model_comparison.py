@@ -506,8 +506,8 @@ def create_comparison_grid_from_config(model_configs: Dict,
     ncols = len(model_configs['models'])
     
     # Adjust figure size based on number of columns
-    width_per_col = 5  # Width per column in inches
-    height_per_row = 4  # Height per row in inches
+    width_per_col = 6  # Increased from 5 to 6 inches per column
+    height_per_row = 5  # Increased from 4 to 5 inches per row
     figsize = (width_per_col * ncols, height_per_row * (nrows + 1))
     
     # Create figure with extra row for input and ideal images
@@ -515,7 +515,7 @@ def create_comparison_grid_from_config(model_configs: Dict,
     
     # Create a grid for the entire figure with adjusted spacing and height ratios
     gs = fig.add_gridspec(nrows + 1, ncols, 
-                         height_ratios=[0.7] + [1]*nrows,  # Make top row slightly smaller
+                         height_ratios=[1.2] + [1]*nrows,  # Increased from 0.7 to 1.2 to make top row larger
                          hspace=0.3, wspace=0.3)
     
     # Plot input and ideal images in the first two columns of the top row
@@ -524,13 +524,15 @@ def create_comparison_grid_from_config(model_configs: Dict,
     
     # Plot input image
     im_input = ax_input.imshow(input_data.squeeze().cpu().numpy(), cmap='jet')
-    ax_input.set_title('Input Image')
+    ax_input.set_title('Input Image', fontsize=24)
     plt.colorbar(im_input, ax=ax_input, fraction=0.046, pad=0.04)
-    
+    ax_input.tick_params(axis='both', labelsize=20)
+   
     # Plot ideal image
     im_ideal = ax_ideal.imshow(ideal_data.squeeze().cpu().numpy(), cmap='jet')
-    ax_ideal.set_title('Ideal Image')
+    ax_ideal.set_title('Ideal Image', fontsize=24)
     plt.colorbar(im_ideal, ax=ax_ideal, fraction=0.046, pad=0.04)
+    ax_ideal.tick_params(axis='both', labelsize=20)
     
     # Find peaks in ideal image if peak calculation is enabled
     ideal_peaks = None
@@ -538,7 +540,7 @@ def create_comparison_grid_from_config(model_configs: Dict,
         ideal_peaks, ideal_fwhm = find_peaks_and_fwhm(ideal_data.squeeze().cpu().numpy(), sigma=peak_sigma)
         # Plot peaks on ideal image
         for peak in ideal_peaks:
-            ax_ideal.plot(peak[1], peak[0], 'g+', markersize=8, markeredgewidth=2)
+            ax_ideal.plot(peak[1], peak[0], 'g+', markersize=10, markeredgewidth=2)
     
     # Create axes for model outputs
     axes = np.zeros((nrows, ncols), dtype=object)
@@ -571,13 +573,14 @@ def create_comparison_grid_from_config(model_configs: Dict,
         ax = axes[row_idx, col_idx]
         im = ax.imshow(output.squeeze().cpu().numpy(), cmap='jet')
         plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+        ax.tick_params(axis='both', labelsize=16)
         
         # Plot peaks if peak calculation is enabled
         matched_peaks = 0
         if calculate_peaks and ideal_peaks:
             # Plot ideal peaks in green
             for peak in ideal_peaks:
-                ax.plot(peak[1], peak[0], 'g+', markersize=8, markeredgewidth=2)
+                ax.plot(peak[1], peak[0], 'g+', markersize=10, markeredgewidth=2)
             
             # Find peaks in model output
             output_peaks, _ = find_peaks_and_fwhm(output.squeeze().cpu().numpy(), sigma=peak_sigma)
@@ -621,12 +624,12 @@ def create_comparison_grid_from_config(model_configs: Dict,
         
         # Add row labels for iterations
         if col_idx == 0:
-            ax.set_ylabel(f"{row['iterations']} iterations")
+            ax.set_ylabel(f"{row['iterations']} epochs",fontsize=20)
         
         # Add column labels for model types
         if row_idx == 0:
             model_type = "Unet" if row['use_unet'] else "No Unet"
-            ax.set_title(f"{row['loss_type']}\n{model_type}")
+            ax.set_title(f"{row['loss_type']}\n{model_type}", fontsize=20)
     
     # Add legend for peak markers in a better position
     if calculate_peaks:
@@ -638,7 +641,7 @@ def create_comparison_grid_from_config(model_configs: Dict,
         if len(model_configs['models']) > 2:
             ax_legend = fig.add_subplot(gs[0, 2:])
             ax_legend.axis('off')
-            ax_legend.legend(handles=legend_elements, loc='center', frameon=False)
+            ax_legend.legend(handles=legend_elements, loc='center left', frameon=False, fontsize=36,markerscale=3)  # Increased fontsize from default to 14
     
     plt.tight_layout()
     return fig
@@ -1082,7 +1085,7 @@ def save_stats_table(stats: Dict[str, Dict[str, float]],
 #%%
 # Example usage:
 model_configs = {
-    'iterations': [500],#[2, 10, 25, 50, 100, 500],
+    'iterations': [2, 10, 25, 50, 100, 500],
     'models': {
         'L1_no_Unet': 'best_model_ZCB_9_no_Unet_epoch_{}.pth',
         'L1_Unet': 'best_model_ZCB_9_Unet_epoch_{}.pth',
@@ -1105,7 +1108,7 @@ print(f'Using index {ind}')
 # preprocess diffraction pattern
 #dp_pp,_,_ = ptNN_U.preprocess_ZCB_9(np.load(f'/net/micdata/data2/12IDC/ptychosaxs/data/diff_sim/32/output_hanning_conv_{ind:05d}.npz')['convDP'],mask)
 #dp_pp_IDEAL,_,_ = ptNN_U.preprocess_ZCB_9(np.load(f'/net/micdata/data2/12IDC/ptychosaxs/data/diff_sim/32/output_hanning_conv_{ind:05d}.npz')['pinholeDP_extra_conv'],mask=np.ones(dp_pp[0][0].shape))
-hr,kr,lr=3,1,0
+hr,kr,lr=1,0,0
 dp_pp,_,_ = ptNN_U.preprocess_ZCB_9(np.load(f'/net/micdata/data2/12IDC/ptychosaxs/data/diff_sim/lattice_ls400_gs1024_lsp6_r3.0_typeSC/output_hanning_conv_{hr}_{kr}_{lr}_00006.npz')['convDP'],mask)
 dp_pp_IDEAL,_,_ = ptNN_U.preprocess_ZCB_9(np.load(f'/net/micdata/data2/12IDC/ptychosaxs/data/diff_sim/lattice_ls400_gs1024_lsp6_r3.0_typeSC/output_hanning_conv_{hr}_{kr}_{lr}_00006.npz')['pinholeDP_extra_conv'],mask=np.ones(dp_pp[0][0].shape))
 

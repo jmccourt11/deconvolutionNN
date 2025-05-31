@@ -325,6 +325,7 @@ def main():
                  names=['Angle', 'y_shift', 'x_shift', 'scanNo'])  # Specify column names
     scan_numbers = df['scanNo'].values.tolist()
 
+    scan_number=[5065]
     center = (517, 575)
     dpsize = 256
     
@@ -343,7 +344,7 @@ def main():
     mask = np.load(mask_path)
     
     # Output H5 file
-    output_file = 'combined_diffraction_patterns_TEST.h5'
+    output_file = f'combined_diffraction_patterns_TEST_{scan_number[0]}.h5'
     
     # Get already processed scans
     processed_scans = get_processed_scans(output_file)
