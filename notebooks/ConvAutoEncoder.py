@@ -284,11 +284,24 @@ class ConvAutoencoderSkip(nn.Module):
 #Zhihua probe
 #probe=loadmat("/net/micdata/data2/12IDC/2024_Dec/results/JM02_3D_/fly482/roi2_Ndp1024/MLc_L1_p10_gInf_Ndp256_mom0.5_pc100_noModelCon_bg0.1_vi_mm/MLc_L1_p10_g400_Ndp512_mom0.5_pc400_noModelCon_bg0.1_vp4_vi_mm/Niter1000.mat")['probe'].T[0][0].T
 #probe=loadmat("/net/micdata/data2/12IDC/2024_Dec/results/JM02_3D_/fly585/roi0_Ndp512/MLc_L1_p10_g1000_Ndp256_mom0.5_pc200_model_scale_rotation_shear_asymmetry_noModelCon_bg0.1_vi_mm/MLc_L1_p10_g100_Ndp512_mom0.5_pc200_model_scale_asymmetry_rotation_shear_maxPosError200nm_noModelCon_bg0.1_vi_mm/Niter600.mat")['probe'].T[0].T
-with h5py.File("/net/micdata/data2/12IDC/2025_Feb/ptychi_recons/S5008/Ndp256_LSQML_c1000_m0.5_p15_cp_mm_opr3_ic_pc_ul2/recon_Niter1000.h5",'r') as f:
-    probe=f['probe'][0][0]
+# with h5py.File("/net/micdata/data2/12IDC/2025_Feb/ptychi_recons/S5008/Ndp256_LSQML_c1000_m0.5_p15_cp_mm_opr3_ic_pc_ul2/recon_Niter1000.h5",'r') as f:
+#     probe=f['probe'][0][0]
 
 
+import scipy.io as sio
+sample_dir = 'RC02_R3D_'
+base_directory = '/net/micdata/data2/12IDC/2024_Dec/results/'
+recon_path = 'MLc_L1_p10_g50_Ndp1280_mom0.5_pc0_noModelCon_bg0.1_vi_mm/MLc_L1_p10_g50_Ndp1280_mom0.5_bg0.1_vp4_vi_mm/'
+scan_number = 888
 
+ob = sio.loadmat(f"{base_directory}/{sample_dir}/fly{scan_number:03d}/roi0_Ndp1280/{recon_path}/Niter200.mat")
+ob_w = np.array(ob['object'])
+pb = np.array(ob['probe'])
+
+ob_w = ob
+#pb1 = pb[:,:,0,0]
+pb1 = np.sum(pb, axis=(2))[:,:,0]
+probe=pb1.copy()
 
 print(probe.shape)
 plt.imshow(np.abs(probe))

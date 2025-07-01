@@ -18,10 +18,13 @@ class recon_model(nn.Module):
             )
             return block
     
-            
         def up_conv(in_channels, out_channels):
-            return nn.ConvTranspose2d(in_channels, out_channels, kernel_size=2, stride=2)
-
+            return nn.Sequential(
+                nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True),
+                nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1),
+                nn.BatchNorm2d(out_channels),
+                nn.ReLU()
+            )
             
         def conv_last(in_channels,out_channels):
             block = nn.Sequential(
@@ -41,9 +44,9 @@ class recon_model(nn.Module):
         self.bottleneck = conv_block(nconv*4, nconv*4*2)
         
         #convoluted diffraction pattern decoder blocks
-        self.decoder4=conv_block(nconv*4,nconv*4)
-        self.decoder3=conv_block(nconv*2,nconv*2)
-        self.decoder2=conv_block(nconv,nconv)
+        self.decoder4=conv_block(nconv*4*2,nconv*4)
+        self.decoder3=conv_block(nconv*4*2,nconv*2)
+        self.decoder2=conv_block(nconv*2*2,nconv)
         
         self.up_conv4=up_conv(nconv*4*2,nconv*4)
         self.up_conv3=up_conv(nconv*4,nconv*2)
@@ -51,27 +54,24 @@ class recon_model(nn.Module):
 
         self.conv_last=conv_last(nconv,1)
         
-    def forward(self,x):#,p):
+    def forward(self,x):
+        # Encoder
         x1 = self.encoder1(x)
         x2 = self.encoder2(self.drop(self.pool(x1)))
         x3 = self.encoder3(self.drop(self.pool(x2)))
-
         b = self.bottleneck(self.drop(self.pool(x3)))
 
-        #without skip connections
+        # Decoder with skip connections
         d3 = self.up_conv4(b)
         d3 = self.decoder4(d3)
-
-        #without skip connections
+        
         d2 = self.up_conv3(d3)
-        d2 = self.decoder3(d2)
-
-        #without skip connections
+        d2 = self.decoder3(torch.cat([d2, x2], dim=1))
+        
         d1 = self.up_conv2(d2)
-        d1 = self.decoder2(d1)
+        d1 = self.decoder2(torch.cat([d1, x1], dim=1))
 
         d0 = self.conv_last(d1)
         
-        out=d0
-        return out
+        return d0
     

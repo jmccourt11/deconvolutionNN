@@ -325,7 +325,7 @@ def main():
                  names=['Angle', 'y_shift', 'x_shift', 'scanNo'])  # Specify column names
     scan_numbers = df['scanNo'].values.tolist()
 
-    scan_number=[5065]
+    #scan_number=[5065]
     center = (517, 575)
     dpsize = 256
     
@@ -344,7 +344,7 @@ def main():
     mask = np.load(mask_path)
     
     # Output H5 file
-    output_file = f'combined_diffraction_patterns_TEST_{scan_number[0]}.h5'
+    output_file = f'combined_diffraction_patterns_TEST_variance_threshold.h5'
     
     # Get already processed scans
     processed_scans = get_processed_scans(output_file)
@@ -352,10 +352,12 @@ def main():
     print(f"Found {len(processed_scans)} already processed scans. {len(remaining_scans)} scans remaining.")
     
     # Add indices file parameter
-    indices_file = "/home/beams/PTYCHOSAXS/NN/ptychosaxsNN/utils/ZCB_9_3D_sample_indices.h5" 
+    #indices_file = "/home/beams/PTYCHOSAXS/NN/ptychosaxsNN/utils/ZCB_9_3D_sample_indices.h5" 
+    #indices_file = "/home/beams/PTYCHOSAXS/NN/ptychosaxsNN/utils/ZCB_9_3D_sample_indices_variance.h5" 
+    indices_file = "/home/beams/PTYCHOSAXS/NN/ptychosaxsNN/utils/ZCB_9_3D_sample_indices_variance_threshold.h5" 
     
     # Add delay parameter
-    delay_between_scans = 40  # seconds
+    delay_between_scans = 0.1  # seconds
     
     # Process remaining scans sequentially with delay
     results = []
@@ -390,14 +392,14 @@ if __name__ == "__main__":
     #remove_scans_from_h5(h5_file, scans_to_remove)
     main()
     
-#%%
-with h5py.File('combined_diffraction_patterns_TEST.h5', 'r') as f:
+`#%%
+with h5py.File('combined_diffraction_patterns_TEST_variance_threshold.h5', 'r') as f:
     print(f['metadata']['angles'][()])
-# #%%
-# # Add metadata to H5 file
-# h5_file = 'combined_diffraction_patterns_TEST.h5'
-# df = pd.read_csv('/net/micdata/data2/12IDC/2025_Feb/misc/ZCB_9_3D_/ZCB9_3D_alignment_shifts_28nm.txt', 
-#                  comment='#',
-#                  names=['Angle', 'y_shift', 'x_shift', 'scanNo'])
-# add_metadata_to_h5(h5_file, df)
+#%%
+# Add metadata to H5 file
+h5_file = 'combined_diffraction_patterns_TEST_variance_threshold.h5'
+df = pd.read_csv('/net/micdata/data2/12IDC/2025_Feb/misc/ZCB_9_3D_/ZCB9_3D_alignment_shifts_28nm.txt', 
+                 comment='#',
+                 names=['Angle', 'y_shift', 'x_shift', 'scanNo'])
+add_metadata_to_h5(h5_file, df)
 # %%
