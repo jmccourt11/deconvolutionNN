@@ -110,6 +110,20 @@ def main() -> None:
     except Exception as e:
         print(f"Deconvolution failed: {e}")
 
+    # Plot results (uses stored data automatically)
+    print("\n8. Plotting results...")
+    try:
+        engine.plot_results(
+            decoded_results=decoded,  # dummy, just for API
+            probe_convolved_results=probe_convolved,  # dummy, just for API
+            input_data=data,
+            n_samples=3,
+            mode="autoencoder"
+        )
+        print("✓ Results plotted successfully")
+    except Exception as e:
+        print(f"✗ Error plotting results: {e}")
+
     # Plot training history if available
     if (
         hasattr(engine, "trainer")

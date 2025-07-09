@@ -29,6 +29,7 @@ class DeconvolutionTrainer:
         device: torch.device,
         learning_rate: float = 1e-4,
         weight_decay: float = 1e-4,
+        training_mode: str = "autoencoder",
     ) -> None:
         """
         Initialize the trainer.
@@ -38,11 +39,13 @@ class DeconvolutionTrainer:
             device: Device to train on (CPU/GPU)
             learning_rate: Learning rate for optimization
             weight_decay: Weight decay for regularization
+            training_mode: "autoencoder" or "supervised"
         """
         self.model = model.to(device)
         self.device = device
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
+        self.training_mode = training_mode
 
         # Initialize optimizer and scheduler
         self.optimizer = optim.Adam(
@@ -82,51 +85,50 @@ class DeconvolutionTrainer:
     ) -> float:
         """
         Train for one epoch.
-
-        Args:
-            trainloader: Training data loader
-            loss_function: Loss function to use
-            plot_samples: Whether to plot sample predictions
-
-        Returns:
-            Average training loss for the epoch
         """
         self.model.train()
         tot_loss = 0.0
 
-        for i, ft_images in enumerate(tqdm(trainloader, desc="Training")):
-            ft_images = ft_images[0].to(self.device)
-            model_output = self.model(ft_images)
+        for i, batch_data in enumerate(tqdm(trainloader, desc="Training")):
+            # Handle different data loader formats
+            if self.training_mode == "supervised":
+                # Paired data loader returns (input, target)
+                ft_images, target = batch_data
+                ft_images = ft_images.to(self.device)
+                target = target.to(self.device)
+            else:
+                # Single data loader returns (input,)
+                ft_images = batch_data[0].to(self.device)
+                target = ft_images  # For autoencoder mode
             
+            model_output = self.model(ft_images)
             # Handle different model outputs
             if isinstance(model_output, tuple):
                 decoded, probe_convolved = model_output
             else:
-                # For models that return single tensor, use it as both decoded and probe_convolved
                 decoded = model_output
                 probe_convolved = model_output
 
+            # Select prediction based on training_mode
+            if self.training_mode == "supervised":
+                prediction = decoded
+            else:  # autoencoder mode
+                prediction = probe_convolved
+
             self.optimizer.zero_grad()
-
-            loss = loss_function(probe_convolved, ft_images, decoded)
-
+            loss = loss_function(prediction, target, decoded)
             loss.backward()
             self.optimizer.step()
-
             tot_loss += loss.detach().item()
 
-            # Plot random samples from first batch
             if plot_samples and i == 0:
-                self._plot_training_samples(ft_images, decoded, probe_convolved)
-
-            # Step the scheduler
+                self._plot_training_samples(ft_images, decoded, probe_convolved, mode=self.training_mode, target=target)
             if hasattr(self, "scheduler"):
                 self.scheduler.step()
                 self.metrics["lrs"].append(self.scheduler.get_last_lr())
 
         avg_loss = tot_loss / len(trainloader)
         self.metrics["losses"].append([avg_loss])
-
         return avg_loss
 
     def validate_epoch(
@@ -134,40 +136,43 @@ class DeconvolutionTrainer:
     ) -> float:
         """
         Validate for one epoch.
-
-        Args:
-            validloader: Validation data loader
-            loss_function: Loss function to use
-
-        Returns:
-            Average validation loss for the epoch
         """
         self.model.eval()
         tot_val_loss = 0.0
 
         with torch.no_grad():
-            for ft_images in tqdm(validloader, desc="Validation"):
-                ft_images = ft_images[0].to(self.device)
-                model_output = self.model(ft_images)
+            for i, batch_data in enumerate(tqdm(validloader, desc="Validation")):
+                # Handle different data loader formats
+                if self.training_mode == "supervised":
+                    # Paired data loader returns (input, target)
+                    ft_images, target = batch_data
+                    ft_images = ft_images.to(self.device)
+                    target = target.to(self.device)
+                else:
+                    # Single data loader returns (input,)
+                    ft_images = batch_data[0].to(self.device)
+                    target = ft_images  # For autoencoder mode
                 
-                # Handle different model outputs
+                model_output = self.model(ft_images)
                 if isinstance(model_output, tuple):
                     decoded, probe_convolved = model_output
                 else:
-                    # For models that return single tensor, use it as both decoded and probe_convolved
                     decoded = model_output
                     probe_convolved = model_output
 
-                val_loss = loss_function(probe_convolved, ft_images, decoded)
+                # Select prediction based on training_mode
+                if self.training_mode == "supervised":
+                    prediction = decoded
+                else:
+                    prediction = probe_convolved
+
+                val_loss = loss_function(prediction, target, decoded)
                 tot_val_loss += val_loss.detach().item()
 
         avg_val_loss = tot_val_loss / len(validloader)
         self.metrics["val_losses"].append([avg_val_loss])
-
-        # Update best validation loss
         if avg_val_loss < self.metrics["best_val_loss"]:
             self.metrics["best_val_loss"] = avg_val_loss
-
         return avg_val_loss
 
     def train(
@@ -225,45 +230,43 @@ class DeconvolutionTrainer:
         ft_images: torch.Tensor,
         decoded: torch.Tensor,
         probe_convolved: torch.Tensor,
+        mode: str = "autoencoder",
+        target: Optional[torch.Tensor] = None,
     ) -> None:
         """
         Plot sample predictions during training.
-
         Args:
-            ft_images: Input images
-            decoded: Decoded objects
+            ft_images: Input images (convDP)
+            decoded: Decoded objects (network output)
             probe_convolved: Probe convolved outputs
+            mode: "autoencoder" or "supervised"
+            target: Target data (for supervised mode, should be idealDP)
         """
-        # Select random index from batch
         rand_idx = random.randint(0, ft_images.shape[0] - 1)
-
-        # Create figure with 4 subplots
         fig, (ax1, ax2, ax3, ax4) = plt.subplots(1, 4, figsize=(15, 5))
-
-        # Plot input image
-        im1 = ax1.imshow(ft_images[rand_idx, 0].cpu().detach().numpy())
-        ax1.set_title("Input Image")
+        # Always show input as convDP
+        input_img = ft_images[rand_idx, 0].cpu().detach().numpy()
+        im1 = ax1.imshow(input_img)
+        ax1.set_title("Input (ConvDP)")
         plt.colorbar(im1, ax=ax1)
-
-        # Plot decoded image
-        im2 = ax2.imshow(decoded[rand_idx, 0].cpu().detach().numpy())
-        ax2.set_title("Decoded Image")
+        if mode == "supervised" and target is not None:
+            net_out = decoded[rand_idx, 0].cpu().detach().numpy()
+            tgt = target[rand_idx, 0].cpu().detach().numpy()
+            ax2.set_title("Network Output (Decoded)")
+            ax3.set_title("Target (IdealDP)")
+        else:
+            net_out = probe_convolved[rand_idx, 0].cpu().detach().numpy()
+            tgt = input_img
+            ax2.set_title("Network Output (Probe Convolved)")
+            ax3.set_title("Target (Input ConvDP)")
+        im2 = ax2.imshow(net_out)
         plt.colorbar(im2, ax=ax2)
-
-        # Plot probe convolved image
-        im3 = ax3.imshow(probe_convolved[rand_idx, 0].cpu().detach().numpy())
-        ax3.set_title("Probe Convolved")
+        im3 = ax3.imshow(tgt)
         plt.colorbar(im3, ax=ax3)
-
-        # Plot difference
-        diff = (
-            ft_images[rand_idx, 0].cpu().detach().numpy()
-            - probe_convolved[rand_idx, 0].cpu().detach().numpy()
-        )
+        diff = tgt - net_out
         im4 = ax4.imshow(diff)
-        ax4.set_title("Difference")
+        ax4.set_title("Difference (Target - Output)")
         plt.colorbar(im4, ax=ax4)
-
         plt.tight_layout()
         plt.show()
 
@@ -329,47 +332,6 @@ class DeconvolutionTrainer:
         plt.grid(True)
         plt.tight_layout()
         plt.show()
-
-
-def evaluate_model(
-    model: ConvAutoencoderSkip, testloader: DataLoader, device: torch.device
-) -> tuple[np.ndarray, np.ndarray]:
-    """
-    Evaluate the trained model on test data.
-
-    Args:
-        model: Trained model
-        testloader: Test data loader
-        device: Device to run evaluation on
-
-    Returns:
-        Tuple of (decoded_results, probe_convolved_results)
-    """
-    model.eval()
-    results = []
-    results_pc = []
-
-    with torch.no_grad():
-        for test in tqdm(testloader, desc="Evaluating"):
-            tests = test[0].to(device)
-            model_output = model(tests)
-            
-            # Handle different model outputs
-            if isinstance(model_output, tuple):
-                decoded, probe_convolved = model_output
-            else:
-                # For models that return single tensor, use it as both decoded and probe_convolved
-                decoded = model_output
-                probe_convolved = model_output
-
-            for j in range(tests.shape[0]):
-                results.append(decoded[j].detach().cpu().numpy())
-                results_pc.append(probe_convolved[j].detach().cpu().numpy())
-
-    results = np.array(results).squeeze()
-    results_pc = np.array(results_pc).squeeze()
-
-    return results, results_pc
 
 
 def azimuthal_average(

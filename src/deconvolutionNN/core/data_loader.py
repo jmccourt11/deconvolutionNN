@@ -312,6 +312,63 @@ def create_data_loaders(
     return train_loader, val_loader, test_loader
 
 
+def create_paired_data_loaders(
+    input_data: np.ndarray,
+    target_data: np.ndarray,
+    batch_size: int,
+    train_split: float = 0.75,
+    val_split: float = 0.125,
+    num_workers: int = 4,
+    return_indices: bool = False,
+) -> tuple:
+    """
+    Create train, validation, and test data loaders for paired data (supervised training).
+    Optionally return the indices for reproducible splits.
+    """
+    if input_data.shape[0] != target_data.shape[0]:
+        raise ValueError(f"Input and target data must have same number of samples. Got {input_data.shape[0]} and {target_data.shape[0]}")
+    
+    n_total = input_data.shape[0]
+    n_train = int(n_total * train_split)
+    n_val = int(n_total * val_split)
+    n_test = n_total - n_train - n_val
+
+    # Reshape data for PyTorch: (N, 1, H, W)
+    input_tensor = torch.Tensor(input_data.reshape(-1, 1, input_data.shape[1], input_data.shape[2]))
+    target_tensor = torch.Tensor(target_data.reshape(-1, 1, target_data.shape[1], target_data.shape[2]))
+
+    # Shuffle both input and target data together
+    indices = np.arange(n_total)
+    np.random.shuffle(indices)
+    input_tensor = input_tensor[indices]
+    target_tensor = target_tensor[indices]
+
+    train_idx = indices[:n_train]
+    val_idx = indices[n_train:n_train + n_val]
+    test_idx = indices[n_train + n_val:]
+
+    # Create datasets
+    train_data = TensorDataset(input_tensor[:n_train], target_tensor[:n_train])
+    val_data = TensorDataset(input_tensor[n_train : n_train + n_val], target_tensor[n_train : n_train + n_val])
+    test_data = TensorDataset(input_tensor[n_train + n_val :], target_tensor[n_train + n_val :])
+
+    # Create data loaders
+    train_loader = DataLoader(
+        train_data, batch_size=batch_size, shuffle=True, num_workers=num_workers
+    )
+    val_loader = DataLoader(
+        val_data, batch_size=batch_size, shuffle=True, num_workers=num_workers
+    )
+    test_loader = DataLoader(
+        test_data, batch_size=batch_size, shuffle=False, num_workers=num_workers
+    )
+
+    if return_indices:
+        return train_loader, val_loader, test_loader, (train_idx, val_idx, test_idx)
+    else:
+        return train_loader, val_loader, test_loader
+
+
 # Placeholder functions for compatibility
 def log10_custom(data: np.ndarray) -> np.ndarray:
     """

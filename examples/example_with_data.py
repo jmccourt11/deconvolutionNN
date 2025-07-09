@@ -36,7 +36,7 @@ def main() -> None:
     try:
         conv_DPs, ideal_DPs, probe_DPs = engine.load_convoluted_and_ideal_patterns(
             h5_file_path=h5_file_path,
-            max_dps=12500,  # Adjust based on your data size
+            max_dps=500,  # Adjust based on your data size
         )
         print("✓ Diffraction patterns loaded successfully")
         
@@ -78,7 +78,7 @@ def main() -> None:
     # Setup training
     print("\n5. Setting up training infrastructure...")
     try:
-        engine.setup_training(learning_rate=1e-4, weight_decay=1e-4)
+        engine.setup_training(learning_rate=1e-4, weight_decay=1e-4, training_mode="supervised")
         print("✓ Training setup completed")
     except Exception as e:
         print(f"✗ Error setting up training: {e}")
@@ -88,12 +88,12 @@ def main() -> None:
     print("\n6. Training the model...")
     try:
         metrics = engine.train_model(
-            epochs=100,  # Adjust based on your needs
+            epochs=8,  # Adjust based on your needs
             batch_size=32,  # Adjust based on your GPU memory
             train_split=0.75,
             val_split=0.125,
             loss_function="custom_loss",
-            plot_samples=True,  # Set to False if you don't want plots during training
+            plot_samples=False,  # Set to False if you don't want plots during training
             save_path="trained_models/best_model.pth",
         )
         print("✓ Training completed successfully")
@@ -104,8 +104,15 @@ def main() -> None:
     # Evaluate the model
     print("\n7. Evaluating the model...")
     try:
-        results, results_pc = engine.evaluate_model(batch_size=32)
+        results, results_pc = engine.evaluate_model(
+            batch_size=32,
+            metric_names=['mse', 'mae', 'psnr']  # Add metrics calculation
+        )
         print("✓ Evaluation completed successfully")
+        print(f"  - Results shape: {results.shape}")
+        print(f"  - Probe convolved shape: {results_pc.shape}")
+        print(f"  - Training mode: {engine.training_mode}")
+        print(f"  - Evaluated on test split (12.5% of data)")
     except Exception as e:
         print(f"✗ Error during evaluation: {e}")
         return
@@ -113,7 +120,14 @@ def main() -> None:
     # Plot results
     print("\n8. Plotting results...")
     try:
-        engine.plot_results(results, results_pc, n_samples=5)
+        engine.plot_results(
+            decoded_results=results,
+            probe_convolved_results=results_pc,
+            input_data=conv_DPs,
+            target_data=ideal_DPs,
+            n_samples=3,
+            # mode parameter is optional - will use trainer's mode automatically
+        )
         print("✓ Results plotted successfully")
     except Exception as e:
         print(f"✗ Error plotting results: {e}")
@@ -134,6 +148,32 @@ def main() -> None:
 
     except Exception as e:
         print(f"✗ Deconvolution failed: {e}")
+
+    # Optional: Compare test split vs full dataset evaluation
+    print("\n9.5. Optional: Full dataset evaluation for comparison...")
+    try:
+        from deconvolutionNN.core.eval import evaluate_model_comprehensive
+        
+        # Full dataset evaluation
+        full_results = evaluate_model_comprehensive(
+            model=engine.model,
+            input_data=engine.processed_conv,
+            target_data=engine.processed_ideal,
+            device=engine.device,
+            batch_size=32,
+            training_mode=engine.training_mode,
+            metric_names=['mse', 'mae', 'psnr'],
+            evaluate_full_dataset=True,  # Use full dataset
+        )
+        
+        print("Full dataset evaluation results:")
+        for metric, value in full_results['metrics'].items():
+            print(f"  - {metric}: {value:.6f}")
+        print(f"  - Evaluated on {full_results['output_shape'][0]} samples (100% of data)")
+        
+    except Exception as e:
+        print(f"✗ Full dataset evaluation failed: {e}")
+        print("  (This is optional and not required for normal evaluation)")
 
     # Plot training history if available
     if (
