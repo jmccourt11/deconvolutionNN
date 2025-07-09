@@ -1,0 +1,134 @@
+# deconvolutionNN - Cursor Rules
+
+## Project Overview
+This is a modern Python package for neural network-based deconvolution with a web GUI. The project follows strict Python best practices and modern development standards.
+
+## Code Style & Standards
+
+### Python Version
+- Use Python 3.11+ features
+- Include type hints for all functions and methods
+- Use f-strings for string formatting
+- Prefer list/dict comprehensions over loops when appropriate
+
+### Code Organization
+- Follow the src/ layout structure
+- Keep modules focused and single-purpose
+- Use relative imports within the package
+- Place all tests inside src/deconvolutionNN/tests/
+
+### Naming Conventions
+- Use snake_case for functions, variables, and modules
+- Use PascalCase for classes
+- Use UPPER_CASE for constants
+- Use descriptive names that explain intent
+
+### Documentation
+- Include docstrings for all public functions and classes
+- Use Google-style docstrings
+- Include type hints in docstrings
+- Document exceptions that may be raised
+
+### Error Handling
+- Use specific exception types
+- Include meaningful error messages
+- Avoid bare except clauses
+- Use context managers for resource management
+
+### Security
+- Never use eval() unless absolutely necessary and properly sandboxed
+- Validate all user inputs
+- Use parameterized queries for database operations
+- Sanitize file paths and URLs
+
+## Package Structure
+```
+src/deconvolutionNN/
+├── __init__.py          # Package initialization
+├── core/               # Core deconvolution functionality
+├── models/             # Neural network models
+├── utils/              # Utility functions
+├── web/                # Web GUI components
+└── tests/              # Test modules
+```
+
+## Dependencies
+- Core: numpy, scipy, matplotlib, torch, streamlit, plotly
+- Development: pytest, black, isort, ruff, flake8, mypy, pre-commit
+- Documentation: sphinx, sphinx-rtd-theme
+
+## Testing
+- Write unit tests for all functions
+- Use pytest for testing framework
+- Aim for >90% code coverage
+- Use descriptive test names
+- Mock external dependencies
+
+## Code Quality Tools
+- black: Code formatting (88 character line length)
+- isort: Import sorting
+- ruff: Fast Python linter
+- flake8: Style guide enforcement
+- mypy: Type checking
+- pre-commit: Automated quality checks
+
+## Web GUI Guidelines
+- Use Streamlit for the web interface
+- Create intuitive and responsive layouts
+- Include proper error handling and user feedback
+- Use Plotly for interactive visualizations
+- Follow accessibility best practices
+
+## Performance Considerations
+- Use vectorized operations with numpy
+- Leverage GPU acceleration with PyTorch when available
+- Profile code for bottlenecks
+- Use appropriate data structures
+- Consider memory usage for large datasets
+
+## Best Practices
+- Write self-documenting code
+- Keep functions small and focused
+- Use dependency injection where appropriate
+- Follow the principle of least surprise
+- Write code for maintainability, not cleverness
+- Use logging instead of print statements
+- Handle edge cases explicitly
+
+## Common Patterns
+- Use dataclasses for data containers
+- Implement context managers for resource management
+- Use abstract base classes for interfaces
+- Implement proper __repr__ and __str__ methods
+- Use property decorators for computed attributes
+
+## Avoid
+- Global variables
+- Mutable default arguments
+- Deep nesting (>3 levels)
+- Magic numbers (use constants)
+- Hardcoded paths
+- Unnecessary complexity
+- Premature optimization
+
+## When Adding New Features
+1. Write tests first (TDD approach)
+2. Update documentation
+3. Add type hints
+4. Follow existing code patterns
+5. Update requirements if needed
+6. Run all quality checks
+7. Update CHANGELOG.md
+
+## Git Workflow
+- Use descriptive commit messages
+- Create feature branches for new work
+- Squash commits before merging
+- Keep commits atomic and focused
+- Use conventional commit format
+
+## Environment Management
+- Use conda for environment management
+- Pin dependency versions in pyproject.toml
+- Use separate environments for development and production
+- Document environment setup in README.md
