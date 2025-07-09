@@ -175,7 +175,7 @@ src/utils/combined_diffraction_patterns_TEST.h5.backup*
 notebooks/eval/*.png
 
 # Model files
-trained_models/
+trained_models/*.pth
 *.pth
 *.pt
 *.ckpt
