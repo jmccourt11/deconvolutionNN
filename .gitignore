@@ -171,6 +171,7 @@ cython_debug/
 *.npz
 *.h5
 src/utils/plots/*.png
+src/utils/combined_diffraction_patterns_TEST.h5.backup*
 notebooks/eval/*.png
 
 # Model files
