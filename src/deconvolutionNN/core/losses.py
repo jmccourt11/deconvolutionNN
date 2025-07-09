@@ -73,7 +73,9 @@ def custom_loss(
     # Create central beam mask
     h, w = output.shape[2:]
     y, x = torch.meshgrid(
-        torch.arange(h, device=output.device), torch.arange(w, device=output.device)
+        torch.arange(h, device=output.device), 
+        torch.arange(w, device=output.device),
+        indexing="ij"
     )
     center_y, center_x = h // 2, w // 2
     r = torch.sqrt((x - center_x) ** 2 + (y - center_y) ** 2)
@@ -168,7 +170,9 @@ def custom_loss3(
     # Center distance map for radial weighting
     h, w = decoded.shape[2:]
     y, x = torch.meshgrid(
-        torch.arange(h, device=decoded.device), torch.arange(w, device=decoded.device)
+        torch.arange(h, device=decoded.device), 
+        torch.arange(w, device=decoded.device),
+        indexing="ij"
     )
     center_y, center_x = h // 2, w // 2
     r = torch.sqrt((x - center_x) ** 2 + (y - center_y) ** 2 + eps)

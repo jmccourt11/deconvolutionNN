@@ -39,6 +39,12 @@ def main() -> None:
             max_dps=12500,  # Adjust based on your data size
         )
         print("✓ Diffraction patterns loaded successfully")
+        
+        # Plot example data samples
+        print("\n2.5. Plotting example data samples...")
+        engine.plot_data_samples(n_samples=3, use_preprocessed=False)  # Show raw data first
+        engine.plot_data_samples(n_samples=3, use_preprocessed=True)   # Show preprocessed data
+        
     except FileNotFoundError:
         print("✗ Could not find diffraction pattern file")
         print("  Please update the h5_file_path to point to your actual data file")
@@ -63,7 +69,7 @@ def main() -> None:
     # Create model
     print("\n4. Creating neural network model...")
     try:
-        engine.create_model()
+        engine.create_model(model_type="recon_model")
         print("✓ Model created successfully")
     except Exception as e:
         print(f"✗ Error creating model: {e}")
@@ -88,7 +94,7 @@ def main() -> None:
             val_split=0.125,
             loss_function="custom_loss",
             plot_samples=True,  # Set to False if you don't want plots during training
-            save_path="models/best_model.pth",
+            save_path="trained_models/best_model.pth",
         )
         print("✓ Training completed successfully")
     except Exception as e:

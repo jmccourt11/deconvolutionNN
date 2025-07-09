@@ -6,6 +6,7 @@ from typing import Any, Optional, Union
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+from tqdm import tqdm
 
 from ..models.autoencoder import AutoEncoder
 from ..models.base import BaseModel
@@ -69,7 +70,7 @@ class DeconvolutionEngine:
         - convDP: Convoluted diffraction patterns (input data)
         - pinholeDP: Ideal diffraction patterns (target data)
         - probe_DPs: Dummy probe array for testing (placeholder)
-
+        
         Args:
             h5_file_path: Path to the HDF5 file containing the diffraction patterns
             max_dps: Maximum number of diffraction patterns to load
@@ -102,23 +103,75 @@ class DeconvolutionEngine:
     ) -> np.ndarray:
         """
         Load and optionally resize the probe kernel.
-
+        If probe file is not found, creates a dummy probe.
+        
         Args:
             probe_path: Path to the probe kernel file
             target_size: Target size for resizing (if None, keeps original size)
+            
+        Returns:
+            Loaded probe kernel (real or dummy)
+        """
+        try:
+            print(f"Loading probe kernel from: {probe_path}")
+            self.probe_kernel = load_probe_kernel(probe_path)
+
+            if target_size is not None:
+                print(f"Resizing probe kernel to {target_size}x{target_size}")
+                self.probe_kernel = resize_probe(self.probe_kernel, target_size)
+
+            print(f"Probe kernel shape: {self.probe_kernel.shape}")
+            return self.probe_kernel
+            
+        except FileNotFoundError:
+            print(f"⚠️  Probe file not found: {probe_path}")
+            print("Creating dummy probe kernel for training...")
+            
+            # Create dummy probe
+            if target_size is None:
+                target_size = 256  # Default size
+            
+            self.probe_kernel = self._create_dummy_probe(target_size)
+            print(f"✓ Dummy probe kernel created with shape: {self.probe_kernel.shape}")
+            return self.probe_kernel
+            
+        except Exception as e:
+            print(f"⚠️  Error loading probe kernel: {e}")
+            print("Creating dummy probe kernel for training...")
+            
+            # Create dummy probe
+            if target_size is None:
+                target_size = 256  # Default size
+                
+            self.probe_kernel = self._create_dummy_probe(target_size)
+            print(f"✓ Dummy probe kernel created with shape: {self.probe_kernel.shape}")
+            return self.probe_kernel
+
+    def _create_dummy_probe(self, size: int = 256) -> np.ndarray:
+        """
+        Create a dummy probe kernel for training when real probe is not available.
+
+        Args:
+            size: Size of the probe kernel
 
         Returns:
-            Loaded probe kernel
+            Dummy complex probe kernel
         """
-        print(f"Loading probe kernel from: {probe_path}")
-        self.probe_kernel = load_probe_kernel(probe_path)
+        import numpy as np
+        
+        # Create a simple Gaussian probe
+        x, y = np.meshgrid(np.arange(size), np.arange(size))
+        center = size // 2
 
-        if target_size is not None:
-            print(f"Resizing probe kernel to {target_size}x{target_size}")
-            self.probe_kernel = resize_probe(self.probe_kernel, target_size)
+        # Gaussian function
+        sigma = size // 8
+        probe = np.exp(-((x - center) ** 2 + (y - center) ** 2) / (2 * sigma**2))
 
-        print(f"Probe kernel shape: {self.probe_kernel.shape}")
-        return self.probe_kernel
+        # Add some phase variation
+        phase = np.random.rand(size, size) * 2 * np.pi
+        probe = probe * np.exp(1j * phase)
+
+        return probe
 
     def load_data(
         self,
@@ -212,11 +265,11 @@ class DeconvolutionEngine:
     ) -> DeconvolutionTrainer:
         """
         Setup the training infrastructure.
-
+        
         Args:
             learning_rate: Learning rate for optimization
             weight_decay: Weight decay for regularization
-
+            
         Returns:
             Configured trainer
         """
@@ -233,6 +286,87 @@ class DeconvolutionEngine:
 
         return self.trainer
 
+    def preprocess_loaded_data(
+        self,
+        target_size: int = 256,
+        center_radius: int = 40,
+        min_intensity_threshold: float = 10000.0,
+    ) -> np.ndarray:
+        """
+        Preprocess loaded HDF5 data for training.
+        
+        This method takes the loaded conv_DPs and ideal_DPs and prepares them
+        for training by applying normalization and filtering.
+
+        Args:
+            target_size: Target size for resizing
+            center_radius: Radius for central beam masking
+            min_intensity_threshold: Minimum intensity threshold for filtering
+
+        Returns:
+            Preprocessed data ready for training
+        """
+        if self.conv_DPs is None or self.ideal_DPs is None:
+            raise ValueError("No data loaded. Call load_convoluted_and_ideal_patterns first.")
+
+        print("Preprocessing loaded HDF5 data for training...")
+        
+        # Use convoluted patterns as input data
+        dps = self.conv_DPs
+        
+        print(f"Original data shape: {dps.shape}")
+        
+        # Apply log10 transformation
+        print("Applying log10 transformation...")
+        try:
+            from .data_loader import log10_custom
+            amp_dps = log10_custom(dps)
+        except ImportError:
+            # Fallback to numpy log10
+            amp_dps = np.log10(dps + 1e-10)
+
+        # Resize if needed
+        if amp_dps.shape[1] != target_size or amp_dps.shape[2] != target_size:
+            print(f"Resizing from {amp_dps.shape[1]}x{amp_dps.shape[2]} to {target_size}x{target_size}")
+            from skimage.transform import resize
+            amp_dps_red = np.asarray(
+                [
+                    resize(
+                        d,
+                        (target_size, target_size),
+                        preserve_range=True,
+                        anti_aliasing=True,
+                    )
+                    for d in tqdm(amp_dps, desc="Resizing")
+                ]
+            )
+        else:
+            amp_dps_red = amp_dps
+
+        print("Normalizing data...")
+        # Normalize each pattern
+        amp_dps_red = np.asarray(
+            [(a - np.min(a)) / (np.max(a) - np.min(a)) for a in tqdm(amp_dps_red, desc="Normalizing")]
+        )
+
+        # Filter patterns based on intensity
+        print("Filtering patterns...")
+        from .data_loader import create_center_mask
+        mask = create_center_mask((target_size, target_size), center_radius)
+        filtered_dps = []
+
+        for dp in tqdm(amp_dps_red, desc="Filtering"):
+            total_intensity = np.sum(dp * mask)
+            if total_intensity > min_intensity_threshold:
+                filtered_dps.append(dp)
+
+        self.processed_data = np.asarray(filtered_dps)
+        print(f"Preprocessed data shape: {self.processed_data.shape}")
+        print(f"Filtered out {len(amp_dps_red) - len(filtered_dps)} patterns")
+        
+        
+        return self.processed_data
+
     def train_model(
         self,
         data: Optional[np.ndarray] = None,
@@ -243,12 +377,14 @@ class DeconvolutionEngine:
         loss_function: str = "custom_loss",
         plot_samples: bool = False,
         save_path: Optional[str] = None,
+        preprocess_data: bool = True,
+        target_size: int = 256,
     ) -> dict[str, list]:
         """
         Train the deconvolution model.
 
         Args:
-            data: Preprocessed diffraction patterns (if None, uses self.processed_data)
+            data: Preprocessed diffraction patterns (if None, uses self.processed_data or loads from HDF5)
             batch_size: Batch size for training
             epochs: Number of training epochs
             train_split: Fraction of data for training
@@ -256,6 +392,8 @@ class DeconvolutionEngine:
             loss_function: Loss function to use ("custom_loss", "custom_loss2", "custom_loss3")
             plot_samples: Whether to plot sample predictions during training
             save_path: Path to save the best model
+            preprocess_data: Whether to preprocess loaded HDF5 data
+            target_size: Target size for preprocessing
 
         Returns:
             Training metrics
@@ -266,10 +404,20 @@ class DeconvolutionEngine:
         # Use stored data if none provided
         if data is None:
             if self.processed_data is None:
-                raise ValueError(
-                    "No data available. Load data first or provide data parameter."
-                )
-            data = self.processed_data
+                # Check if we have loaded HDF5 data
+                if self.conv_DPs is not None and self.ideal_DPs is not None:
+                    if preprocess_data:
+                        print("No preprocessed data found, preprocessing loaded HDF5 data...")
+                        data = self.preprocess_loaded_data(target_size=target_size)
+                    else:
+                        print("Using raw loaded HDF5 data for training...")
+                        data = self.conv_DPs
+                else:
+                    raise ValueError(
+                        "No data available. Load data first or provide data parameter."
+                    )
+            else:
+                data = self.processed_data
 
         print(f"Starting model training for {epochs} epochs")
         print(f"Data shape: {data.shape}, Batch size: {batch_size}")
@@ -362,7 +510,7 @@ class DeconvolutionEngine:
     ) -> tuple[np.ndarray, np.ndarray]:
         """
         Deconvolve a single diffraction pattern.
-
+        
         Args:
             diffraction_pattern: Input diffraction pattern
             model_path: Path to load model from (if None, uses current model)
@@ -388,7 +536,15 @@ class DeconvolutionEngine:
         # Run inference
         self.model.eval()
         with torch.no_grad():
-            decoded, probe_convolved = self.model(input_tensor)
+            model_output = self.model(input_tensor)
+            
+            # Handle different model outputs
+            if isinstance(model_output, tuple):
+                decoded, probe_convolved = model_output
+            else:
+                # For models that return single tensor, use it as both decoded and probe_convolved
+                decoded = model_output
+                probe_convolved = model_output
 
         # Convert back to numpy
         decoded_np = decoded.cpu().numpy().squeeze()
@@ -507,6 +663,83 @@ class DeconvolutionEngine:
 
         plt.tight_layout()
         plt.show()
+
+    def plot_data_samples(
+        self, 
+        n_samples: int = 5, 
+        use_preprocessed: bool = True,
+        target_size: int = 256
+    ) -> None:
+        """
+        Plot example pairs of convDP and idealDP data.
+        
+        Args:
+            n_samples: Number of sample pairs to plot
+            use_preprocessed: Whether to use preprocessed data or raw data
+            target_size: Target size for preprocessing (if using raw data)
+        """
+        if self.conv_DPs is None or self.ideal_DPs is None:
+            print("No data loaded. Call load_convoluted_and_ideal_patterns first.")
+            return
+            
+        print(f"Plotting {n_samples} sample pairs...")
+        
+        if use_preprocessed:
+            # Use preprocessed data if available
+            if self.processed_data is None:
+                print("No preprocessed data found. Preprocessing data for visualization...")
+                self.preprocess_loaded_data(target_size=target_size)
+            
+            conv_data = self.processed_data
+            ideal_data = self.processed_data  # For now, use same data for both
+            title_suffix = " (Preprocessed)"
+        else:
+            # Use raw data
+            conv_data = self.conv_DPs
+            ideal_data = self.ideal_DPs
+            title_suffix = " (Raw)"
+        
+        # Select random samples
+        n_available = min(len(conv_data), n_samples)
+        if n_available < n_samples:
+            print(f"Warning: Only {n_available} samples available, plotting all of them.")
+        
+        indices = np.random.choice(len(conv_data), n_available, replace=False)
+        
+        # Create figure
+        fig, axes = plt.subplots(2, n_available, figsize=(4*n_available, 8))
+        if n_available == 1:
+            axes = axes.reshape(2, 1)
+        
+        # Add titles
+        fig.suptitle(f"ConvDP / IdealDP Sample Pairs{title_suffix}", fontsize=16)
+        
+        for i, idx in enumerate(indices):
+            # Plot convDP
+            im1 = axes[0, i].imshow(conv_data[idx], cmap='viridis')
+            axes[0, i].set_title(f'ConvDP {idx}')
+            axes[0, i].set_xlabel('X')
+            axes[0, i].set_ylabel('Y')
+            plt.colorbar(im1, ax=axes[0, i])
+            
+            # Plot idealDP
+            im2 = axes[1, i].imshow(ideal_data[idx], cmap='viridis')
+            axes[1, i].set_title(f'IdealDP {idx}')
+            axes[1, i].set_xlabel('X')
+            axes[1, i].set_ylabel('Y')
+            plt.colorbar(im2, ax=axes[1, i])
+        
+        plt.tight_layout()
+        plt.show()
+        
+        # Print statistics
+        print(f"\nData Statistics{title_suffix}:")
+        print(f"  ConvDP shape: {conv_data.shape}")
+        print(f"  IdealDP shape: {ideal_data.shape}")
+        print(f"  ConvDP range: [{conv_data.min():.4f}, {conv_data.max():.4f}]")
+        print(f"  IdealDP range: [{ideal_data.min():.4f}, {ideal_data.max():.4f}]")
+        print(f"  ConvDP mean: {conv_data.mean():.4f}")
+        print(f"  IdealDP mean: {ideal_data.mean():.4f}")
 
     def plot_radial_profiles(
         self,

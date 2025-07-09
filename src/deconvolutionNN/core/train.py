@@ -96,7 +96,15 @@ class DeconvolutionTrainer:
 
         for i, ft_images in enumerate(tqdm(trainloader, desc="Training")):
             ft_images = ft_images[0].to(self.device)
-            decoded, probe_convolved = self.model(ft_images)
+            model_output = self.model(ft_images)
+            
+            # Handle different model outputs
+            if isinstance(model_output, tuple):
+                decoded, probe_convolved = model_output
+            else:
+                # For models that return single tensor, use it as both decoded and probe_convolved
+                decoded = model_output
+                probe_convolved = model_output
 
             self.optimizer.zero_grad()
 
@@ -140,7 +148,15 @@ class DeconvolutionTrainer:
         with torch.no_grad():
             for ft_images in tqdm(validloader, desc="Validation"):
                 ft_images = ft_images[0].to(self.device)
-                decoded, probe_convolved = self.model(ft_images)
+                model_output = self.model(ft_images)
+                
+                # Handle different model outputs
+                if isinstance(model_output, tuple):
+                    decoded, probe_convolved = model_output
+                else:
+                    # For models that return single tensor, use it as both decoded and probe_convolved
+                    decoded = model_output
+                    probe_convolved = model_output
 
                 val_loss = loss_function(probe_convolved, ft_images, decoded)
                 tot_val_loss += val_loss.detach().item()
@@ -336,11 +352,19 @@ def evaluate_model(
     with torch.no_grad():
         for test in tqdm(testloader, desc="Evaluating"):
             tests = test[0].to(device)
-            result_d, result_pc = model(tests)
+            model_output = model(tests)
+            
+            # Handle different model outputs
+            if isinstance(model_output, tuple):
+                decoded, probe_convolved = model_output
+            else:
+                # For models that return single tensor, use it as both decoded and probe_convolved
+                decoded = model_output
+                probe_convolved = model_output
 
             for j in range(tests.shape[0]):
-                results.append(result_d[j].detach().cpu().numpy())
-                results_pc.append(result_pc[j].detach().cpu().numpy())
+                results.append(decoded[j].detach().cpu().numpy())
+                results_pc.append(probe_convolved[j].detach().cpu().numpy())
 
     results = np.array(results).squeeze()
     results_pc = np.array(results_pc).squeeze()
