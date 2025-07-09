@@ -11,11 +11,11 @@ from .base import BaseModel
 class ReconModelNoUnet(BaseModel):
     """
     Reconstruction model for 256x256 diffraction pattern deconvolution without U-Net skip connections.
-    
+
     This model uses a standard encoder-decoder architecture without skip connections
     to perform deconvolution of diffraction patterns. It's designed specifically for
     256x256 input patterns.
-    
+
     Attributes:
         encoder1, encoder2, encoder3: Encoder layers with increasing channel depth
         pool: Max pooling layer for downsampling

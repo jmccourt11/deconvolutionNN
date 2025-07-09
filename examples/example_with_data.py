@@ -6,9 +6,10 @@ This example demonstrates how to use the package for training and inference
 with actual diffraction pattern data and probe kernels.
 """
 
-import numpy as np
-import torch
 from pathlib import Path
+
+import torch
+
 # Import the main components
 from deconvolutionNN.core.deconvolution import DeconvolutionEngine
 
@@ -27,15 +28,15 @@ def main() -> None:
     engine = DeconvolutionEngine()
 
     # Set path to diffraction patterns
-    base_path = Path('/net/micdata/data2/12IDC/ptychosaxs')
-    h5_file_path = base_path / f"data/combined_data_TEMP.h5"
+    base_path = Path("/net/micdata/data2/12IDC/ptychosaxs")
+    h5_file_path = base_path / "data/combined_data_TEMP.h5"
 
     # Load your diffraction pattern data
     print("\n2. Loading diffraction pattern data...")
     try:
         conv_DPs, ideal_DPs, probe_DPs = engine.load_convoluted_and_ideal_patterns(
             h5_file_path=h5_file_path,
-            max_dps=12500  # Adjust based on your data size
+            max_dps=12500,  # Adjust based on your data size
         )
         print("✓ Diffraction patterns loaded successfully")
     except FileNotFoundError:
@@ -87,7 +88,7 @@ def main() -> None:
             val_split=0.125,
             loss_function="custom_loss",
             plot_samples=True,  # Set to False if you don't want plots during training
-            save_path="models/best_model.pth"
+            save_path="models/best_model.pth",
         )
         print("✓ Training completed successfully")
     except Exception as e:
