@@ -7,9 +7,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
+from ..models.base import BaseModel
 from ..models.conv_autoencoder import ConvAutoencoderSkip
+from ..models.autoencoder import AutoEncoder
+from ..models.encoder1 import ReconModel
+from ..models.encoder1_no_Unet import ReconModelNoUnet
 from .data_loader import (
     create_data_loaders,
+    load_convoluted_and_ideal_patterns,
     load_diffraction_patterns,
     load_probe_kernel,
     preprocess_diffraction_patterns,
@@ -45,8 +50,51 @@ class DeconvolutionEngine:
         self.model: Optional[ConvAutoencoderSkip] = None
         self.trainer: Optional[DeconvolutionTrainer] = None
         self.probe_kernel: Optional[np.ndarray] = None
+        
+        # Data storage
+        self.conv_DPs: Optional[np.ndarray] = None
+        self.ideal_DPs: Optional[np.ndarray] = None
+        self.probe_DPs: Optional[np.ndarray] = None
+        self.processed_data: Optional[np.ndarray] = None
 
         print(f"DeconvolutionEngine initialized on device: {self.device}")
+
+    def load_convoluted_and_ideal_patterns(
+        self, 
+        h5_file_path: Union[str, Path], 
+        max_dps: int = 10800
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Load convoluted and ideal diffraction patterns from HDF5 file.
+        
+        This method loads three types of diffraction patterns:
+        - convDP: Convoluted diffraction patterns (input data)
+        - pinholeDP: Ideal diffraction patterns (target data)
+        - probe_DPs: Dummy probe array for testing (placeholder)
+        
+        Args:
+            h5_file_path: Path to the HDF5 file containing the diffraction patterns
+            max_dps: Maximum number of diffraction patterns to load
+            
+        Returns:
+            Tuple of (conv_DPs, ideal_DPs, probe_DPs)
+                - conv_DPs: Convoluted diffraction patterns array
+                - ideal_DPs: Ideal diffraction patterns array  
+                - probe_DPs: Dummy probe array for testing
+        """
+        print(f"Loading convoluted and ideal patterns from: {h5_file_path}")
+        
+        self.conv_DPs, self.ideal_DPs, self.probe_DPs = load_convoluted_and_ideal_patterns(
+            h5_file_path=h5_file_path,
+            max_dps=max_dps
+        )
+        
+        print(f"Data loaded successfully:")
+        print(f"  - Convoluted patterns: {self.conv_DPs.shape}")
+        print(f"  - Ideal patterns: {self.ideal_DPs.shape}")
+        print(f"  - Probe patterns: {self.probe_DPs.shape}")
+        
+        return self.conv_DPs, self.ideal_DPs, self.probe_DPs
 
     def load_probe(
         self, probe_path: Union[str, Path], target_size: Optional[int] = None
@@ -101,7 +149,7 @@ class DeconvolutionEngine:
         print(f"Loaded {dps.shape[0]} diffraction patterns")
 
         # Preprocess the data
-        processed_data = preprocess_diffraction_patterns(
+        self.processed_data = preprocess_diffraction_patterns(
             dps=dps,
             center=center,
             target_size=target_size,
@@ -109,21 +157,40 @@ class DeconvolutionEngine:
             min_intensity_threshold=min_intensity_threshold,
         )
 
-        print(f"Preprocessed data shape: {processed_data.shape}")
-        return processed_data
+        print(f"Preprocessed data shape: {self.processed_data.shape}")
+        return self.processed_data
 
-    def create_model(self) -> ConvAutoencoderSkip:
+    def create_model(self, model_type: str = "conv_autoencoder_skip") -> BaseModel:
         """
         Create the neural network model.
 
+        Args:
+            model_type: Which model architecture to use. Options are:
+                - "conv_autoencoder_skip" (default)
+                - "autoencoder"
+                - "recon_model"
+                - "recon_model_no_unet"
+
         Returns:
-            Initialized ConvAutoencoderSkip model
+            Initialized model
         """
-        if self.probe_kernel is None:
+        if self.probe_kernel is None and model_type == "conv_autoencoder_skip":
             raise ValueError("Probe kernel must be loaded before creating model")
 
-        print("Creating ConvAutoencoderSkip model")
-        self.model = ConvAutoencoderSkip(self.probe_kernel)
+        if model_type == "conv_autoencoder_skip":
+            print("Creating ConvAutoencoderSkip model")
+            self.model = ConvAutoencoderSkip(self.probe_kernel)
+        elif model_type == "autoencoder":
+            print("Creating AutoEncoder model")
+            self.model = AutoEncoder(self.model_config)
+        elif model_type == "recon_model":
+            print("Creating ReconModel (U-Net) model")
+            self.model = ReconModel(self.model_config)
+        elif model_type == "recon_model_no_unet":
+            print("Creating ReconModelNoUnet (no U-Net) model")
+            self.model = ReconModelNoUnet(self.model_config)
+        else:
+            raise ValueError(f"Unknown model_type: {model_type}")
 
         # Move to device
         self.model = self.model.to(self.device)
@@ -167,7 +234,7 @@ class DeconvolutionEngine:
 
     def train_model(
         self,
-        data: np.ndarray,
+        data: Optional[np.ndarray] = None,
         batch_size: int = 32,
         epochs: int = 100,
         train_split: float = 0.75,
@@ -180,7 +247,7 @@ class DeconvolutionEngine:
         Train the deconvolution model.
 
         Args:
-            data: Preprocessed diffraction patterns
+            data: Preprocessed diffraction patterns (if None, uses self.processed_data)
             batch_size: Batch size for training
             epochs: Number of training epochs
             train_split: Fraction of data for training
@@ -194,6 +261,12 @@ class DeconvolutionEngine:
         """
         if self.trainer is None:
             raise ValueError("Training must be set up before training")
+
+        # Use stored data if none provided
+        if data is None:
+            if self.processed_data is None:
+                raise ValueError("No data available. Load data first or provide data parameter.")
+            data = self.processed_data
 
         print(f"Starting model training for {epochs} epochs")
         print(f"Data shape: {data.shape}, Batch size: {batch_size}")
@@ -236,13 +309,16 @@ class DeconvolutionEngine:
         return metrics
 
     def evaluate_model(
-        self, data: np.ndarray, batch_size: int = 32, model_path: Optional[str] = None
+        self, 
+        data: Optional[np.ndarray] = None, 
+        batch_size: int = 32, 
+        model_path: Optional[str] = None
     ) -> tuple[np.ndarray, np.ndarray]:
         """
         Evaluate the trained model.
 
         Args:
-            data: Test data
+            data: Test data (if None, uses self.processed_data)
             batch_size: Batch size for evaluation
             model_path: Path to load model from (if None, uses current model)
 
@@ -254,6 +330,12 @@ class DeconvolutionEngine:
 
         if self.model is None:
             raise ValueError("Model must be available for evaluation")
+
+        # Use stored data if none provided
+        if data is None:
+            if self.processed_data is None:
+                raise ValueError("No data available. Load data first or provide data parameter.")
+            data = self.processed_data
 
         print("Evaluating model")
 
@@ -340,20 +422,26 @@ class DeconvolutionEngine:
 
     def plot_results(
         self,
-        input_data: np.ndarray,
         decoded_results: np.ndarray,
         probe_convolved_results: np.ndarray,
+        input_data: Optional[np.ndarray] = None,
         n_samples: int = 5,
     ) -> None:
         """
         Plot deconvolution results.
 
         Args:
-            input_data: Original input data
             decoded_results: Decoded objects
             probe_convolved_results: Probe convolved outputs
+            input_data: Original input data (if None, uses self.conv_DPs)
             n_samples: Number of samples to plot
         """
+        # Use stored input data if none provided
+        if input_data is None:
+            if self.conv_DPs is None:
+                raise ValueError("No input data available. Load data first or provide input_data parameter.")
+            input_data = self.conv_DPs
+
         ntest = decoded_results.shape[0]
         n = min(n_samples, ntest)
 
@@ -415,20 +503,26 @@ class DeconvolutionEngine:
 
     def plot_radial_profiles(
         self,
-        input_data: np.ndarray,
         decoded_results: np.ndarray,
         probe_convolved_results: np.ndarray,
+        input_data: Optional[np.ndarray] = None,
         n_samples: int = 5,
     ) -> None:
         """
         Plot radial profiles of deconvolution results.
 
         Args:
-            input_data: Original input data
             decoded_results: Decoded objects
             probe_convolved_results: Probe convolved outputs
+            input_data: Original input data (if None, uses self.conv_DPs)
             n_samples: Number of samples to plot
         """
+        # Use stored input data if none provided
+        if input_data is None:
+            if self.conv_DPs is None:
+                raise ValueError("No input data available. Load data first or provide input_data parameter.")
+            input_data = self.conv_DPs
+
         ntest = decoded_results.shape[0]
         n = min(n_samples, ntest)
 

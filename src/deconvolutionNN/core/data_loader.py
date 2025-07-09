@@ -1,7 +1,7 @@
 """Data loading and preprocessing utilities for deconvolution."""
 
 from pathlib import Path
-from typing import Union
+from typing import Union, Tuple
 
 import h5py
 import numpy as np
@@ -10,6 +10,61 @@ from skimage.transform import resize
 from sklearn.utils import shuffle
 from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
+
+
+def load_convoluted_and_ideal_patterns(
+    h5_file_path: Union[str, Path], 
+    max_dps: int = 10800
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Load convoluted and ideal diffraction patterns from HDF5 file.
+    
+    This function loads three types of diffraction patterns:
+    - convDP: Convoluted diffraction patterns (input data)
+    - pinholeDP: Ideal diffraction patterns (target data)
+    - probe_DPs: Dummy probe array for testing (placeholder)
+    
+    Args:
+        h5_file_path: Path to the HDF5 file containing the diffraction patterns
+        max_dps: Maximum number of diffraction patterns to load
+        
+    Returns:
+        Tuple of (conv_DPs, ideal_DPs, probe_DPs)
+            - conv_DPs: Convoluted diffraction patterns array
+            - ideal_DPs: Ideal diffraction patterns array  
+            - probe_DPs: Dummy probe array for testing
+    """
+    print('Loading data...')
+    
+    with h5py.File(h5_file_path, "r") as h5f:
+        # Get the keys (dataset names)
+        dataset_keys = list(h5f.keys())
+        num_datasets = len(dataset_keys) // 3  # Assuming convDP and pinholeDP pairs
+        print(f'{num_datasets} diffraction patterns available')
+        
+        # Initialize empty lists for the data
+        conv_DPs = []
+        pinhole_DPs = []
+        
+        # Number of diffraction patterns to actually load
+        numDPs = min(max_dps, num_datasets)
+        
+        # Use tqdm for progress tracking
+        for i in tqdm(range(num_datasets)[:numDPs], desc="Loading HDF5 datasets"):
+            conv_DPs.append(h5f[f"convDP_{i}"][:])  # Load convDP dataset
+            pinhole_DPs.append(h5f[f"pinholeDP_{i}"][:])  # Load pinholeDP dataset
+        
+    # Convert to numpy arrays
+    conv_DPs = np.asarray(conv_DPs)
+    ideal_DPs = np.asarray(pinhole_DPs)
+    probe_DPs = np.ones(conv_DPs.shape)  # Dummy array for testing network with a probe
+    
+    print(f"Loaded {len(conv_DPs)} diffraction patterns")
+    print(f"Convoluted patterns shape: {conv_DPs.shape}")
+    print(f"Ideal patterns shape: {ideal_DPs.shape}")
+    print(f"Probe patterns shape: {probe_DPs.shape}")
+    
+    return conv_DPs, ideal_DPs, probe_DPs
 
 
 def load_probe_kernel(file_path: Union[str, Path]) -> np.ndarray:

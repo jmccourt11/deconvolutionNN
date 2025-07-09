@@ -3,6 +3,8 @@
 from .autoencoder import AutoEncoder
 from .base import BaseModel
 from .conv_autoencoder import ConvAutoencoderSkip
+from .encoder1 import ReconModel
+from .encoder1_no_Unet import ReconModelNoUnet
 from .unet import UNet
 
 __all__ = [
@@ -10,4 +12,6 @@ __all__ = [
     "UNet",
     "AutoEncoder",
     "ConvAutoencoderSkip",
+    "ReconModel",
+    "ReconModelNoUnet",
 ]

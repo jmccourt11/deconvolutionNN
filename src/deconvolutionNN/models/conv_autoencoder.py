@@ -5,9 +5,10 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from .base import BaseModel
 
 
-class ConvAutoencoderSkip(nn.Module):
+class ConvAutoencoderSkip(BaseModel):
     """
     Convolutional autoencoder with skip connections for deconvolution.
 
