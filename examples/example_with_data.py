@@ -39,12 +39,16 @@ def main() -> None:
             max_dps=500,  # Adjust based on your data size
         )
         print("✓ Diffraction patterns loaded successfully")
-        
+
         # Plot example data samples
         print("\n2.5. Plotting example data samples...")
-        engine.plot_data_samples(n_samples=3, use_preprocessed=False)  # Show raw data first
-        engine.plot_data_samples(n_samples=3, use_preprocessed=True)   # Show preprocessed data
-        
+        engine.plot_data_samples(
+            n_samples=3, use_preprocessed=False
+        )  # Show raw data first
+        engine.plot_data_samples(
+            n_samples=3, use_preprocessed=True
+        )  # Show preprocessed data
+
     except FileNotFoundError:
         print("✗ Could not find diffraction pattern file")
         print("  Please update the h5_file_path to point to your actual data file")
@@ -66,8 +70,25 @@ def main() -> None:
         print(f"✗ Error loading probe kernel: {e}")
         return
 
+    # Preprocess data (if needed)
+    print("\n3. Preprocessing data (if needed)...")
+    # If you want to use preprocessed data, ensure it's done here
+    processed_conv, processed_ideal = engine.preprocess_loaded_data(target_size=256)
+
+    # Set up splits and loaders ONCE
+    print("\n4. Setting up data splits and loaders...")
+    engine.setup_data_splits_and_loaders(
+        input_data=processed_conv,
+        target_data=processed_ideal,
+        batch_size=32,
+        train_split=0.75,
+        val_split=0.125,
+        shuffle_train=True,
+        random_state=0,
+    )
+
     # Create model
-    print("\n4. Creating neural network model...")
+    print("\n5. Creating neural network model...")
     try:
         engine.create_model(model_type="recon_model")
         print("✓ Model created successfully")
@@ -76,16 +97,18 @@ def main() -> None:
         return
 
     # Setup training
-    print("\n5. Setting up training infrastructure...")
+    print("\n6. Setting up training infrastructure...")
     try:
-        engine.setup_training(learning_rate=1e-4, weight_decay=1e-4, training_mode="supervised")
+        engine.setup_training(
+            learning_rate=1e-4, weight_decay=1e-4, training_mode="unsupervised"
+        )  # training_mode="supervised")
         print("✓ Training setup completed")
     except Exception as e:
         print(f"✗ Error setting up training: {e}")
         return
 
     # Train the model
-    print("\n6. Training the model...")
+    print("\n7. Training the model...")
     try:
         metrics = engine.train_model(
             epochs=8,  # Adjust based on your needs
@@ -102,29 +125,27 @@ def main() -> None:
         return
 
     # Evaluate the model
-    print("\n7. Evaluating the model...")
+    print("\n8. Evaluating the model...")
     try:
         results, results_pc = engine.evaluate_model(
             batch_size=32,
-            metric_names=['mse', 'mae', 'psnr']  # Add metrics calculation
+            metric_names=["mse", "mae", "psnr"],  # Add metrics calculation
         )
         print("✓ Evaluation completed successfully")
         print(f"  - Results shape: {results.shape}")
         print(f"  - Probe convolved shape: {results_pc.shape}")
         print(f"  - Training mode: {engine.training_mode}")
-        print(f"  - Evaluated on test split (12.5% of data)")
+        print("  - Evaluated on test split (12.5% of data)")
     except Exception as e:
         print(f"✗ Error during evaluation: {e}")
         return
 
     # Plot results
-    print("\n8. Plotting results...")
+    print("\n9. Plotting results...")
     try:
         engine.plot_results(
             decoded_results=results,
             probe_convolved_results=results_pc,
-            input_data=conv_DPs,
-            target_data=ideal_DPs,
             n_samples=3,
             # mode parameter is optional - will use trainer's mode automatically
         )
@@ -133,10 +154,10 @@ def main() -> None:
         print(f"✗ Error plotting results: {e}")
 
     # Demonstrate single deconvolution
-    print("\n9. Demonstrating single deconvolution...")
+    print("\n10. Demonstrating single deconvolution...")
     try:
-        # Use the first pattern from your loaded data
-        test_pattern = conv_DPs[0:1]  # Take first pattern
+        # Use the first pattern from your test set
+        test_pattern = engine.X_test[0:1]  # Take first test pattern
 
         # Deconvolve
         decoded, probe_convolved = engine.deconvolve(test_pattern)
@@ -150,27 +171,29 @@ def main() -> None:
         print(f"✗ Deconvolution failed: {e}")
 
     # Optional: Compare test split vs full dataset evaluation
-    print("\n9.5. Optional: Full dataset evaluation for comparison...")
+    print("\n10.5. Optional: Full dataset evaluation for comparison...")
     try:
         from deconvolutionNN.core.eval import evaluate_model_comprehensive
-        
+
         # Full dataset evaluation
         full_results = evaluate_model_comprehensive(
             model=engine.model,
-            input_data=engine.processed_conv,
-            target_data=engine.processed_ideal,
+            input_data=engine.X_test,
+            target_data=engine.Y_test,
             device=engine.device,
             batch_size=32,
             training_mode=engine.training_mode,
-            metric_names=['mse', 'mae', 'psnr'],
+            metric_names=["mse", "mae", "psnr"],
             evaluate_full_dataset=True,  # Use full dataset
         )
-        
+
         print("Full dataset evaluation results:")
-        for metric, value in full_results['metrics'].items():
+        for metric, value in full_results["metrics"].items():
             print(f"  - {metric}: {value:.6f}")
-        print(f"  - Evaluated on {full_results['output_shape'][0]} samples (100% of data)")
-        
+        print(
+            f"  - Evaluated on {full_results['output_shape'][0]} samples (100% of data)"
+        )
+
     except Exception as e:
         print(f"✗ Full dataset evaluation failed: {e}")
         print("  (This is optional and not required for normal evaluation)")
@@ -182,7 +205,7 @@ def main() -> None:
         and hasattr(engine.trainer, "metrics")
         and engine.trainer.metrics.get("losses")
     ):
-        print("\n10. Plotting training history...")
+        print("\n11. Plotting training history...")
         try:
             engine.trainer.plot_training_history()
             print("✓ Training history plotted successfully")

@@ -1,6 +1,6 @@
 """Evaluation utilities for deconvolution neural networks."""
 
-from typing import Optional, Union
+from typing import Optional
 
 import numpy as np
 import torch
@@ -8,14 +8,13 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from ..models.conv_autoencoder import ConvAutoencoderSkip
-from .data_loader import create_data_loaders, create_paired_data_loaders
 
 
 def evaluate_model(
-    model: ConvAutoencoderSkip, 
-    testloader: DataLoader, 
+    model: ConvAutoencoderSkip,
+    testloader: DataLoader,
     device: torch.device,
-    training_mode: str = "autoencoder"
+    training_mode: str = "autoencoder",
 ) -> tuple[np.ndarray, np.ndarray]:
     """
     Evaluate the trained model on test data.
@@ -42,10 +41,10 @@ def evaluate_model(
             else:
                 # Single data loader returns (input,)
                 tests = batch_data[0]
-                
+
             tests = tests.to(device)
             model_output = model(tests)
-            
+
             # Handle different model outputs
             if isinstance(model_output, tuple):
                 decoded, probe_convolved = model_output
@@ -73,46 +72,48 @@ def evaluate_model_with_data(
     training_mode: str = "autoencoder",
     train_split: float = 0.8,
     val_split: float = 0.1,
-) -> tuple[np.ndarray, np.ndarray]:
+) -> tuple:
     """
     Evaluate model with provided data, handling both autoencoder and supervised modes.
-
-    Args:
-        model: Trained model
-        input_data: Input data for evaluation
-        target_data: Target data (required for supervised mode)
-        device: Device to run evaluation on
-        batch_size: Batch size for evaluation
-        training_mode: "autoencoder" or "supervised"
-        train_split: Fraction for training (not used in evaluation, but needed for data splitting)
-        val_split: Fraction for validation (not used in evaluation, but needed for data splitting)
-
-    Returns:
-        Tuple of (decoded_results, probe_convolved_results)
+    Returns predictions, probe_convolved, test_inputs, test_targets (if available).
     """
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    
+
     # Create appropriate data loader
     if training_mode == "supervised":
         if target_data is None:
             raise ValueError("target_data is required for supervised mode evaluation")
-        _, _, test_loader = create_paired_data_loaders(
+        from .data_loader import create_paired_data_loaders
+
+        _, _, test_loader, (_, _, test_idx) = create_paired_data_loaders(
             input_data=input_data,
             target_data=target_data,
             batch_size=batch_size,
             train_split=train_split,
             val_split=val_split,
+            return_indices=True,
         )
+        test_inputs = input_data[test_idx]
+        test_targets = target_data[test_idx]
     else:
+        from .data_loader import create_data_loaders
+
         _, _, test_loader = create_data_loaders(
             data=input_data,
             batch_size=batch_size,
             train_split=train_split,
             val_split=val_split,
         )
+        # For autoencoder, test_inputs is just the test split of input_data
+        n_total = input_data.shape[0]
+        n_train = int(n_total * train_split)
+        n_val = int(n_total * val_split)
+        test_inputs = input_data[n_train + n_val :]
+        test_targets = None
 
-    return evaluate_model(model, test_loader, device, training_mode)
+    decoded, probe_convolved = evaluate_model(model, test_loader, device, training_mode)
+    return decoded, probe_convolved, test_inputs, test_targets
 
 
 def evaluate_single_pattern(
@@ -147,7 +148,7 @@ def evaluate_single_pattern(
     model.eval()
     with torch.no_grad():
         model_output = model(input_tensor)
-        
+
         # Handle different model outputs
         if isinstance(model_output, tuple):
             decoded, probe_convolved = model_output
@@ -180,48 +181,51 @@ def calculate_metrics(
         Dictionary of metric values
     """
     if metric_names is None:
-        metric_names = ['mse', 'mae']
-    
+        metric_names = ["mse", "mae"]
+
     metrics = {}
-    
+
     # Ensure same shape
     if predictions.shape != targets.shape:
-        raise ValueError(f"Predictions and targets must have same shape. Got {predictions.shape} and {targets.shape}")
-    
+        raise ValueError(
+            f"Predictions and targets must have same shape. Got {predictions.shape} and {targets.shape}"
+        )
+
     # Mean Squared Error
-    if 'mse' in metric_names:
-        metrics['mse'] = np.mean((predictions - targets) ** 2)
-    
+    if "mse" in metric_names:
+        metrics["mse"] = np.mean((predictions - targets) ** 2)
+
     # Mean Absolute Error
-    if 'mae' in metric_names:
-        metrics['mae'] = np.mean(np.abs(predictions - targets))
-    
+    if "mae" in metric_names:
+        metrics["mae"] = np.mean(np.abs(predictions - targets))
+
     # Peak Signal-to-Noise Ratio
-    if 'psnr' in metric_names:
+    if "psnr" in metric_names:
         mse = np.mean((predictions - targets) ** 2)
         if mse == 0:
-            metrics['psnr'] = float('inf')
+            metrics["psnr"] = float("inf")
         else:
             max_val = np.max(targets)
-            metrics['psnr'] = 20 * np.log10(max_val / np.sqrt(mse))
-    
+            metrics["psnr"] = 20 * np.log10(max_val / np.sqrt(mse))
+
     # Structural Similarity Index
-    if 'ssim' in metric_names:
+    if "ssim" in metric_names:
         try:
             from skimage.metrics import structural_similarity as ssim
+
             # Calculate SSIM for each sample and average
             ssim_values = []
             for i in range(predictions.shape[0]):
                 ssim_val = ssim(
-                    predictions[i], 
-                    targets[i], 
-                    data_range=targets[i].max() - targets[i].min()
+                    predictions[i],
+                    targets[i],
+                    data_range=targets[i].max() - targets[i].min(),
                 )
                 ssim_values.append(ssim_val)
-            metrics['ssim'] = np.mean(ssim_values)
+            metrics["ssim"] = np.mean(ssim_values)
         except ImportError:
             print("Warning: skimage not available, skipping SSIM calculation")
-    
+
     return metrics
 
 
@@ -249,26 +253,34 @@ def evaluate_model_full_dataset(
     """
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    
+
     # Create data loaders for full dataset
     if training_mode == "supervised":
         if target_data is None:
             raise ValueError("target_data is required for supervised mode evaluation")
-        
+
         # Create paired tensors for full dataset
-        input_tensor = torch.Tensor(input_data.reshape(-1, 1, input_data.shape[1], input_data.shape[2]))
-        target_tensor = torch.Tensor(target_data.reshape(-1, 1, target_data.shape[1], target_data.shape[2]))
-        
+        input_tensor = torch.Tensor(
+            input_data.reshape(-1, 1, input_data.shape[1], input_data.shape[2])
+        )
+        target_tensor = torch.Tensor(
+            target_data.reshape(-1, 1, target_data.shape[1], target_data.shape[2])
+        )
+
         # Create dataset and loader for full data
-        from torch.utils.data import TensorDataset, DataLoader
+        from torch.utils.data import DataLoader, TensorDataset
+
         full_dataset = TensorDataset(input_tensor, target_tensor)
         full_loader = DataLoader(full_dataset, batch_size=batch_size, shuffle=False)
     else:
         # Create single tensor for full dataset
-        input_tensor = torch.Tensor(input_data.reshape(-1, 1, input_data.shape[1], input_data.shape[2]))
-        
+        input_tensor = torch.Tensor(
+            input_data.reshape(-1, 1, input_data.shape[1], input_data.shape[2])
+        )
+
         # Create dataset and loader for full data
-        from torch.utils.data import TensorDataset, DataLoader
+        from torch.utils.data import DataLoader, TensorDataset
+
         full_dataset = TensorDataset(input_tensor)
         full_loader = DataLoader(full_dataset, batch_size=batch_size, shuffle=False)
 
@@ -315,8 +327,15 @@ def evaluate_model_comprehensive(
             batch_size=batch_size,
             training_mode=training_mode,
         )
+        test_inputs = input_data
+        test_targets = target_data
     else:
-        decoded_results, probe_convolved_results = evaluate_model_with_data(
+        (
+            decoded_results,
+            probe_convolved_results,
+            test_inputs,
+            test_targets,
+        ) = evaluate_model_with_data(
             model=model,
             input_data=input_data,
             target_data=target_data,
@@ -326,7 +345,7 @@ def evaluate_model_comprehensive(
             train_split=train_split,
             val_split=val_split,
         )
-    
+
     # Calculate metrics if target data is available
     metrics = {}
     if target_data is not None:
@@ -340,32 +359,40 @@ def evaluate_model_comprehensive(
                 n_total = len(target_data)
                 n_train = int(n_total * train_split)
                 n_val = int(n_total * val_split)
-                test_targets = target_data[n_train + n_val:]
+                test_targets = target_data[n_train + n_val :]
                 metrics = calculate_metrics(decoded_results, test_targets, metric_names)
         else:
             # For autoencoder mode, compare probe_convolved results with inputs
             if evaluate_full_dataset:
                 # Use full input data
-                metrics = calculate_metrics(probe_convolved_results, input_data, metric_names)
+                metrics = calculate_metrics(
+                    probe_convolved_results, input_data, metric_names
+                )
             else:
                 # Use only test split of input data (same split as used in evaluation)
                 n_total = len(input_data)
                 n_train = int(n_total * train_split)
                 n_val = int(n_total * val_split)
-                test_inputs = input_data[n_train + n_val:]
-                metrics = calculate_metrics(probe_convolved_results, test_inputs, metric_names)
-    
+                test_inputs = input_data[n_train + n_val :]
+                metrics = calculate_metrics(
+                    probe_convolved_results, test_inputs, metric_names
+                )
+
     return {
-        'decoded_results': decoded_results,
-        'probe_convolved_results': probe_convolved_results,
-        'metrics': metrics,
-        'training_mode': training_mode,
-        'input_shape': input_data.shape,
-        'output_shape': decoded_results.shape,
-        'evaluated_on_full_dataset': evaluate_full_dataset,
-        'test_split_info': {
-            'train_split': train_split,
-            'val_split': val_split,
-            'test_split': 1.0 - train_split - val_split,
-        } if not evaluate_full_dataset else None,
+        "decoded_results": decoded_results,
+        "probe_convolved_results": probe_convolved_results,
+        "metrics": metrics,
+        "training_mode": training_mode,
+        "input_shape": input_data.shape,
+        "output_shape": decoded_results.shape,
+        "evaluated_on_full_dataset": evaluate_full_dataset,
+        "test_split_info": {
+            "train_split": train_split,
+            "val_split": val_split,
+            "test_split": 1.0 - train_split - val_split,
+        }
+        if not evaluate_full_dataset
+        else None,
+        "test_inputs": test_inputs,
+        "test_targets": test_targets,
     }

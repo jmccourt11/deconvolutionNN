@@ -14,7 +14,6 @@ from ..models.conv_autoencoder import ConvAutoencoderSkip
 from ..models.encoder1 import ReconModel
 from ..models.encoder1_no_Unet import ReconModelNoUnet
 from .data_loader import (
-    create_data_loaders,
     load_convoluted_and_ideal_patterns,
     load_diffraction_patterns,
     load_probe_kernel,
@@ -70,7 +69,7 @@ class DeconvolutionEngine:
         - convDP: Convoluted diffraction patterns (input data)
         - pinholeDP: Ideal diffraction patterns (target data)
         - probe_DPs: Dummy probe array for testing (placeholder)
-        
+
         Args:
             h5_file_path: Path to the HDF5 file containing the diffraction patterns
             max_dps: Maximum number of diffraction patterns to load
@@ -104,11 +103,11 @@ class DeconvolutionEngine:
         """
         Load and optionally resize the probe kernel.
         If probe file is not found, creates a dummy probe.
-        
+
         Args:
             probe_path: Path to the probe kernel file
             target_size: Target size for resizing (if None, keeps original size)
-            
+
         Returns:
             Loaded probe kernel (real or dummy)
         """
@@ -122,27 +121,27 @@ class DeconvolutionEngine:
 
             print(f"Probe kernel shape: {self.probe_kernel.shape}")
             return self.probe_kernel
-            
+
         except FileNotFoundError:
             print(f"⚠️  Probe file not found: {probe_path}")
             print("Creating dummy probe kernel for training...")
-            
+
             # Create dummy probe
             if target_size is None:
                 target_size = 256  # Default size
-            
+
             self.probe_kernel = self._create_dummy_probe(target_size)
             print(f"✓ Dummy probe kernel created with shape: {self.probe_kernel.shape}")
             return self.probe_kernel
-            
+
         except Exception as e:
             print(f"⚠️  Error loading probe kernel: {e}")
             print("Creating dummy probe kernel for training...")
-            
+
             # Create dummy probe
             if target_size is None:
                 target_size = 256  # Default size
-                
+
             self.probe_kernel = self._create_dummy_probe(target_size)
             print(f"✓ Dummy probe kernel created with shape: {self.probe_kernel.shape}")
             return self.probe_kernel
@@ -158,7 +157,7 @@ class DeconvolutionEngine:
             Dummy complex probe kernel
         """
         import numpy as np
-        
+
         # Create a simple Gaussian probe
         x, y = np.meshgrid(np.arange(size), np.arange(size))
         center = size // 2
@@ -261,19 +260,19 @@ class DeconvolutionEngine:
         return self.model
 
     def setup_training(
-        self, 
-        learning_rate: float = 1e-4, 
+        self,
+        learning_rate: float = 1e-4,
         weight_decay: float = 1e-4,
-        training_mode: str = "autoencoder"
+        training_mode: str = "autoencoder",
     ) -> DeconvolutionTrainer:
         """
         Setup the training infrastructure.
-        
+
         Args:
             learning_rate: Learning rate for optimization
             weight_decay: Weight decay for regularization
             training_mode: "autoencoder" or "supervised"
-            
+
         Returns:
             Configured trainer
         """
@@ -294,16 +293,16 @@ class DeconvolutionEngine:
     def set_training_mode(self, training_mode: str) -> None:
         """
         Set the training mode after setup.
-        
+
         Args:
             training_mode: "autoencoder" or "supervised"
         """
         if self.trainer is None:
             raise ValueError("Training must be set up before changing training mode")
-        
+
         if training_mode not in ["autoencoder", "supervised"]:
             raise ValueError("training_mode must be 'autoencoder' or 'supervised'")
-            
+
         self.trainer.training_mode = training_mode
         print(f"Training mode set to: {training_mode}")
 
@@ -326,7 +325,9 @@ class DeconvolutionEngine:
             Tuple of (preprocessed_conv, preprocessed_ideal)
         """
         if self.conv_DPs is None or self.ideal_DPs is None:
-            raise ValueError("No data loaded. Call load_convoluted_and_ideal_patterns first.")
+            raise ValueError(
+                "No data loaded. Call load_convoluted_and_ideal_patterns first."
+            )
 
         print("Preprocessing loaded HDF5 data for training...")
 
@@ -335,30 +336,40 @@ class DeconvolutionEngine:
             print("Applying log10 transformation...")
             try:
                 from .data_loader import log10_custom
+
                 amp_dps = log10_custom(dps)
             except ImportError:
                 amp_dps = np.log10(dps + 1e-10)
             # Resize if needed
             if amp_dps.shape[1] != target_size or amp_dps.shape[2] != target_size:
-                print(f"Resizing from {amp_dps.shape[1]}x{amp_dps.shape[2]} to {target_size}x{target_size}")
+                print(
+                    f"Resizing from {amp_dps.shape[1]}x{amp_dps.shape[2]} to {target_size}x{target_size}"
+                )
                 from skimage.transform import resize
-                amp_dps_red = np.asarray([
-                    resize(
-                        d,
-                        (target_size, target_size),
-                        preserve_range=True,
-                        anti_aliasing=True,
-                    )
-                    for d in tqdm(amp_dps, desc="Resizing")
-                ])
+
+                amp_dps_red = np.asarray(
+                    [
+                        resize(
+                            d,
+                            (target_size, target_size),
+                            preserve_range=True,
+                            anti_aliasing=True,
+                        )
+                        for d in tqdm(amp_dps, desc="Resizing")
+                    ]
+                )
             else:
                 amp_dps_red = amp_dps
             print("Normalizing data...")
-            amp_dps_red = np.asarray([
-                (a - np.min(a)) / (np.max(a) - np.min(a)) for a in tqdm(amp_dps_red, desc="Normalizing")
-            ])
+            amp_dps_red = np.asarray(
+                [
+                    (a - np.min(a)) / (np.max(a) - np.min(a))
+                    for a in tqdm(amp_dps_red, desc="Normalizing")
+                ]
+            )
             print("Filtering patterns...")
             from .data_loader import create_center_mask
+
             mask = create_center_mask((target_size, target_size), center_radius)
             filtered_dps = []
             for dp in tqdm(amp_dps_red, desc="Filtering"):
@@ -373,6 +384,42 @@ class DeconvolutionEngine:
         self.processed_conv = preprocess(self.conv_DPs)
         self.processed_ideal = preprocess(self.ideal_DPs)
         return self.processed_conv, self.processed_ideal
+
+    def setup_data_splits_and_loaders(
+        self,
+        input_data: np.ndarray,
+        target_data: np.ndarray,
+        batch_size: int,
+        train_split: float = 0.75,
+        val_split: float = 0.125,
+        shuffle_train: bool = True,
+        random_state: int = 0,
+    ) -> None:
+        """
+        Create and store explicit train/val/test splits and DataLoaders (classic slicing logic).
+        Call this ONCE after loading/preprocessing data.
+        """
+        from .data_loader import create_explicit_splits_and_loaders
+
+        splits = create_explicit_splits_and_loaders(
+            input_data=input_data,
+            target_data=target_data,
+            batch_size=batch_size,
+            train_split=train_split,
+            val_split=val_split,
+            shuffle_train=shuffle_train,
+            random_state=random_state,
+        )
+        self.train_loader = splits["train_loader"]
+        self.val_loader = splits["val_loader"]
+        self.test_loader = splits["test_loader"]
+        self.X_train = splits["X_train"]
+        self.Y_train = splits["Y_train"]
+        self.X_val = splits["X_val"]
+        self.Y_val = splits["Y_val"]
+        self.X_test = splits["X_test"]
+        self.Y_test = splits["Y_test"]
+        self.split_indices = splits["indices"]
 
     def train_model(
         self,
@@ -389,19 +436,26 @@ class DeconvolutionEngine:
     ) -> dict[str, list]:
         """
         Train the deconvolution model.
-        
+
         Note: Training mode is set when calling setup_training().
         """
         if self.trainer is None:
             raise ValueError("Training must be set up before training")
-            
+
         # Use stored data if none provided
         if data is None:
-            if (not hasattr(self, 'processed_conv')) or (not hasattr(self, 'processed_ideal')) or self.processed_conv is None or self.processed_ideal is None:
+            if (
+                (not hasattr(self, "processed_conv"))
+                or (not hasattr(self, "processed_ideal"))
+                or self.processed_conv is None
+                or self.processed_ideal is None
+            ):
                 # Check if we have loaded HDF5 data
                 if self.conv_DPs is not None and self.ideal_DPs is not None:
                     if preprocess_data:
-                        print("No preprocessed data found, preprocessing loaded HDF5 data...")
+                        print(
+                            "No preprocessed data found, preprocessing loaded HDF5 data..."
+                        )
                         self.preprocess_loaded_data(target_size=target_size)
                         data = self.processed_conv
                         target = self.processed_ideal
@@ -418,51 +472,43 @@ class DeconvolutionEngine:
                 target = self.processed_ideal
         else:
             target = data  # fallback for legacy usage
-            
+
         print(f"Starting model training for {epochs} epochs")
         print(f"Training mode: {self.trainer.training_mode}")
         print(f"Data shape: {data.shape}, Batch size: {batch_size}")
-        
-        # Create data loaders
-        if self.trainer.training_mode == "supervised":
-            # Use paired data loaders for supervised training
-            from .data_loader import create_paired_data_loaders
-            loaders_and_indices = create_paired_data_loaders(
+
+        # Only create splits/loaders if not already set up
+        if not hasattr(self, "train_loader") or self.train_loader is None:
+            self.setup_data_splits_and_loaders(
                 input_data=data,
                 target_data=target,
                 batch_size=batch_size,
                 train_split=train_split,
                 val_split=val_split,
-                return_indices=True,
+                shuffle_train=True,
+                random_state=0,
             )
-            train_loader, val_loader, test_loader, (train_idx, val_idx, test_idx) = loaders_and_indices
-            self._train_idx = train_idx
-            self._val_idx = val_idx
-            self._test_idx = test_idx
-        else:
-            # Use regular data loaders for autoencoder training
-            train_loader, val_loader, test_loader = create_data_loaders(
-                data=data,
-                batch_size=batch_size,
-                train_split=train_split,
-                val_split=val_split,
-            )
-        
+
+        train_loader = self.train_loader
+        val_loader = self.val_loader
+        test_loader = self.test_loader
+
         # Setup scheduler
         iterations_per_epoch = len(train_loader)
         step_size = 6 * iterations_per_epoch
         max_lr = self.trainer.learning_rate * 10
         self.trainer.setup_scheduler(step_size, max_lr)
-        
+
         # Select loss function
         from .losses import custom_loss, custom_loss2, custom_loss3
+
         loss_functions = {
             "custom_loss": custom_loss,
             "custom_loss2": custom_loss2,
             "custom_loss3": custom_loss3,
         }
         selected_loss = loss_functions.get(loss_function, custom_loss)
-        
+
         # Train the model
         metrics = self.trainer.train(
             trainloader=train_loader,
@@ -509,61 +555,72 @@ class DeconvolutionEngine:
         # Determine data source
         if data is None:
             # Try to use available data from engine
-            if hasattr(self, 'processed_conv') and self.processed_conv is not None:
+            if hasattr(self, "processed_conv") and self.processed_conv is not None:
                 data = self.processed_conv
                 print("Using preprocessed conv data for evaluation")
             elif self.conv_DPs is not None:
                 data = self.conv_DPs
                 print("Using raw conv data for evaluation")
             else:
-                raise ValueError("No data available. Load data first or provide data parameter.")
+                raise ValueError(
+                    "No data available. Load data first or provide data parameter."
+                )
 
-        if target_data is None and self.trainer and self.trainer.training_mode == "supervised":
+        if (
+            target_data is None
+            and self.trainer
+            and self.trainer.training_mode == "supervised"
+        ):
             # Try to use available target data from engine
-            if hasattr(self, 'processed_ideal') and self.processed_ideal is not None:
+            if hasattr(self, "processed_ideal") and self.processed_ideal is not None:
                 target_data = self.processed_ideal
                 print("Using preprocessed ideal data for evaluation")
             elif self.ideal_DPs is not None:
                 target_data = self.ideal_DPs
                 print("Using raw ideal data for evaluation")
             else:
-                print("Warning: No target data available for supervised mode evaluation")
+                print(
+                    "Warning: No target data available for supervised mode evaluation"
+                )
 
         print("Evaluating model")
-        
-        # Use the new evaluation module
-        from .eval import evaluate_model_comprehensive
-        
-        training_mode = self.trainer.training_mode if self.trainer else "autoencoder"
-        
-        results = evaluate_model_comprehensive(
-            model=self.model,
-            input_data=data,
-            target_data=target_data,
-            device=self.device,
-            batch_size=batch_size,
-            training_mode=training_mode,
-            metric_names=metric_names,
-            evaluate_full_dataset=False,  # Use test split to match training data split
-            train_split=train_split,      # Must match training split
-            val_split=val_split,          # Must match training split
-        )
-        
-        # Print metrics if available
-        if results['metrics']:
-            print("Evaluation metrics:")
-            for metric, value in results['metrics'].items():
-                print(f"  {metric}: {value:.6f}")
 
-        print(f"Evaluation completed. Results shape: {results['decoded_results'].shape}")
-        return results['decoded_results'], results['probe_convolved_results']
+        # Use stored test_loader and test data
+        test_loader = getattr(self, "test_loader", None)
+        X_test = getattr(self, "X_test", None)
+        Y_test = getattr(self, "Y_test", None)
+        if (
+            test_loader is None
+            or X_test is None
+            or (self.trainer.training_mode == "supervised" and Y_test is None)
+        ):
+            raise ValueError(
+                "Test loader and test data must be set up before evaluation. Call setup_data_splits_and_loaders or train_model first."
+            )
+
+        # Use the new evaluation module
+        from .eval import evaluate_model
+
+        training_mode = self.trainer.training_mode if self.trainer else "autoencoder"
+        results, results_pc = evaluate_model(
+            model=self.model,
+            testloader=test_loader,
+            device=self.device,
+            training_mode=training_mode,
+        )
+        # Store the test inputs/targets used for evaluation for correct plotting
+        self._last_eval_inputs = X_test
+        self._last_eval_targets = Y_test
+        # Print metrics if available (optional: add metrics calculation here)
+        print(f"Evaluation completed. Results shape: {results.shape}")
+        return results, results_pc
 
     def deconvolve(
         self, diffraction_pattern: np.ndarray, model_path: Optional[str] = None
     ) -> tuple[np.ndarray, np.ndarray]:
         """
         Deconvolve a single diffraction pattern.
-        
+
         Args:
             diffraction_pattern: Input diffraction pattern
             model_path: Path to load model from (if None, uses current model)
@@ -579,7 +636,7 @@ class DeconvolutionEngine:
 
         # Use the new evaluation module
         from .eval import evaluate_single_pattern
-        
+
         return evaluate_single_pattern(
             model=self.model,
             diffraction_pattern=diffraction_pattern,
@@ -641,23 +698,37 @@ class DeconvolutionEngine:
                 mode = "autoencoder"  # fallback
             else:
                 mode = self.trainer.training_mode
-                
+
         # Use stored input data if none provided
         if input_data is None:
-            if self.conv_DPs is None:
+            if (
+                hasattr(self, "_last_eval_inputs")
+                and self._last_eval_inputs is not None
+            ):
+                input_data = self._last_eval_inputs
+            elif hasattr(self, "X_test") and self.X_test is not None:
+                input_data = self.X_test
+            elif self.conv_DPs is None:
                 raise ValueError(
                     "No input data available. Load data first or provide input_data parameter."
                 )
-            input_data = self.conv_DPs
+            else:
+                input_data = self.conv_DPs
         if mode == "supervised" and target_data is None:
-            if hasattr(self, "processed_ideal") and self.processed_ideal is not None:
+            if (
+                hasattr(self, "_last_eval_targets")
+                and self._last_eval_targets is not None
+            ):
+                target_data = self._last_eval_targets
+            elif hasattr(self, "Y_test") and self.Y_test is not None:
+                target_data = self.Y_test
+            elif hasattr(self, "processed_ideal") and self.processed_ideal is not None:
                 target_data = self.processed_ideal
             else:
-                raise ValueError("No target_data (idealDP) available for supervised mode.")
-        # Use test indices for correct correspondence in supervised mode
-        if mode == "supervised" and hasattr(self, "_test_idx"):
-            input_data = input_data[self._test_idx]
-            target_data = target_data[self._test_idx]
+                raise ValueError(
+                    "No target_data (idealDP) available for supervised mode."
+                )
+
         ntest = decoded_results.shape[0]
         n = min(n_samples, ntest)
         fig, axes = plt.subplots(4, n, figsize=(15, 12))
@@ -671,7 +742,8 @@ class DeconvolutionEngine:
             j = int(round(np.random.rand() * ntest))
             # Input
             im = axes[0, i].imshow(
-                input_data[j].reshape(input_data.shape[1], input_data.shape[2])
+                input_data[j].reshape(input_data.shape[1], input_data.shape[2]),
+                clim=(0, 1),
             )
             plt.colorbar(im, ax=axes[0, i], format="%.2f")
             axes[0, i].get_xaxis().set_visible(False)
@@ -688,9 +760,7 @@ class DeconvolutionEngine:
                 net_out = probe_convolved_results[j].reshape(
                     probe_convolved_results.shape[1], probe_convolved_results.shape[2]
                 )
-                target = input_data[j].reshape(
-                    input_data.shape[1], input_data.shape[2]
-                )
+                target = input_data[j].reshape(input_data.shape[1], input_data.shape[2])
             im = axes[1, i].imshow(net_out)
             plt.colorbar(im, ax=axes[1, i], format="%.2f")
             axes[1, i].get_xaxis().set_visible(False)
@@ -710,10 +780,7 @@ class DeconvolutionEngine:
         plt.show()
 
     def plot_data_samples(
-        self, 
-        n_samples: int = 5, 
-        use_preprocessed: bool = True,
-        target_size: int = 256
+        self, n_samples: int = 5, use_preprocessed: bool = True, target_size: int = 256
     ) -> None:
         """
         Plot example pairs of convDP and idealDP data.
@@ -723,8 +790,15 @@ class DeconvolutionEngine:
             return
         print(f"Plotting {n_samples} sample pairs...")
         if use_preprocessed:
-            if (not hasattr(self, 'processed_conv')) or (not hasattr(self, 'processed_ideal')) or self.processed_conv is None or self.processed_ideal is None:
-                print("No preprocessed data found. Preprocessing data for visualization...")
+            if (
+                (not hasattr(self, "processed_conv"))
+                or (not hasattr(self, "processed_ideal"))
+                or self.processed_conv is None
+                or self.processed_ideal is None
+            ):
+                print(
+                    "No preprocessed data found. Preprocessing data for visualization..."
+                )
                 self.preprocess_loaded_data(target_size=target_size)
             conv_data = self.processed_conv
             ideal_data = self.processed_ideal
@@ -735,22 +809,24 @@ class DeconvolutionEngine:
             title_suffix = " (Raw)"
         n_available = min(len(conv_data), n_samples, len(ideal_data))
         if n_available < n_samples:
-            print(f"Warning: Only {n_available} samples available, plotting all of them.")
+            print(
+                f"Warning: Only {n_available} samples available, plotting all of them."
+            )
         indices = np.random.choice(len(conv_data), n_available, replace=False)
-        fig, axes = plt.subplots(2, n_available, figsize=(4*n_available, 8))
+        fig, axes = plt.subplots(2, n_available, figsize=(4 * n_available, 8))
         if n_available == 1:
             axes = axes.reshape(2, 1)
         fig.suptitle(f"ConvDP / IdealDP Sample Pairs{title_suffix}", fontsize=16)
         for i, idx in enumerate(indices):
-            im1 = axes[0, i].imshow(conv_data[idx], cmap='viridis')
-            axes[0, i].set_title(f'ConvDP {idx}')
-            axes[0, i].set_xlabel('X')
-            axes[0, i].set_ylabel('Y')
+            im1 = axes[0, i].imshow(conv_data[idx], cmap="viridis")
+            axes[0, i].set_title(f"ConvDP {idx}")
+            axes[0, i].set_xlabel("X")
+            axes[0, i].set_ylabel("Y")
             plt.colorbar(im1, ax=axes[0, i])
-            im2 = axes[1, i].imshow(ideal_data[idx], cmap='viridis')
-            axes[1, i].set_title(f'IdealDP {idx}')
-            axes[1, i].set_xlabel('X')
-            axes[1, i].set_ylabel('Y')
+            im2 = axes[1, i].imshow(ideal_data[idx], cmap="viridis")
+            axes[1, i].set_title(f"IdealDP {idx}")
+            axes[1, i].set_xlabel("X")
+            axes[1, i].set_ylabel("Y")
             plt.colorbar(im2, ax=axes[1, i])
         plt.tight_layout()
         plt.show()

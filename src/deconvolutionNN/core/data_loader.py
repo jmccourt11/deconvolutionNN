@@ -38,7 +38,9 @@ def load_convoluted_and_ideal_patterns(
     with h5py.File(h5_file_path, "r") as h5f:
         # Get the keys (dataset names)
         dataset_keys = list(h5f.keys())
-        num_datasets = len(dataset_keys) // 3  # Assuming convDP and pinholeDP pairs
+        num_datasets = (
+            len(dataset_keys) // 2
+        )  # Assuming convDP and pinholeDP pairs (can be changed if more than just convDP and pinholeDP keys)
         print(f"{num_datasets} diffraction patterns available")
 
         # Initialize empty lists for the data
@@ -326,16 +328,22 @@ def create_paired_data_loaders(
     Optionally return the indices for reproducible splits.
     """
     if input_data.shape[0] != target_data.shape[0]:
-        raise ValueError(f"Input and target data must have same number of samples. Got {input_data.shape[0]} and {target_data.shape[0]}")
-    
+        raise ValueError(
+            f"Input and target data must have same number of samples. Got {input_data.shape[0]} and {target_data.shape[0]}"
+        )
+
     n_total = input_data.shape[0]
     n_train = int(n_total * train_split)
     n_val = int(n_total * val_split)
     n_test = n_total - n_train - n_val
 
     # Reshape data for PyTorch: (N, 1, H, W)
-    input_tensor = torch.Tensor(input_data.reshape(-1, 1, input_data.shape[1], input_data.shape[2]))
-    target_tensor = torch.Tensor(target_data.reshape(-1, 1, target_data.shape[1], target_data.shape[2]))
+    input_tensor = torch.Tensor(
+        input_data.reshape(-1, 1, input_data.shape[1], input_data.shape[2])
+    )
+    target_tensor = torch.Tensor(
+        target_data.reshape(-1, 1, target_data.shape[1], target_data.shape[2])
+    )
 
     # Shuffle both input and target data together
     indices = np.arange(n_total)
@@ -344,13 +352,18 @@ def create_paired_data_loaders(
     target_tensor = target_tensor[indices]
 
     train_idx = indices[:n_train]
-    val_idx = indices[n_train:n_train + n_val]
-    test_idx = indices[n_train + n_val:]
+    val_idx = indices[n_train : n_train + n_val]
+    test_idx = indices[n_train + n_val :]
 
     # Create datasets
     train_data = TensorDataset(input_tensor[:n_train], target_tensor[:n_train])
-    val_data = TensorDataset(input_tensor[n_train : n_train + n_val], target_tensor[n_train : n_train + n_val])
-    test_data = TensorDataset(input_tensor[n_train + n_val :], target_tensor[n_train + n_val :])
+    val_data = TensorDataset(
+        input_tensor[n_train : n_train + n_val],
+        target_tensor[n_train : n_train + n_val],
+    )
+    test_data = TensorDataset(
+        input_tensor[n_train + n_val :], target_tensor[n_train + n_val :]
+    )
 
     # Create data loaders
     train_loader = DataLoader(
@@ -414,3 +427,71 @@ def load_h5_scan_to_npy(
             # Try to find any dataset
             key = list(f.keys())[0]
             return f[key][:]
+
+
+def create_explicit_splits_and_loaders(
+    input_data: np.ndarray,
+    target_data: np.ndarray,
+    batch_size: int,
+    train_split: float = 0.75,
+    val_split: float = 0.125,
+    shuffle_train: bool = True,
+    random_state: int = 0,
+) -> dict:
+    """
+    Create explicit train/val/test splits and DataLoaders, matching classic slicing logic.
+    Only the training set is shuffled.
+    Returns a dict with splits, indices, and DataLoaders.
+    """
+    n_total = input_data.shape[0]
+    n_test = int(n_total * (1 - train_split - val_split))
+    n_val = int(n_total * val_split)
+    n_train = n_total - n_val - n_test
+
+    # Slicing (no shuffling yet)
+    X_train = input_data[:n_train]
+    X_val = input_data[n_train : n_train + n_val]
+    X_test = input_data[n_train + n_val :]
+    Y_train = target_data[:n_train]
+    Y_val = target_data[n_train : n_train + n_val]
+    Y_test = target_data[n_train + n_val :]
+
+    # Shuffle only the training set
+    if shuffle_train:
+        from sklearn.utils import shuffle
+
+        X_train, Y_train = shuffle(X_train, Y_train, random_state=random_state)
+
+    # Convert to tensors
+    X_train_tensor = torch.Tensor(X_train).unsqueeze(1)
+    Y_train_tensor = torch.Tensor(Y_train).unsqueeze(1)
+    X_val_tensor = torch.Tensor(X_val).unsqueeze(1)
+    Y_val_tensor = torch.Tensor(Y_val).unsqueeze(1)
+    X_test_tensor = torch.Tensor(X_test).unsqueeze(1)
+    Y_test_tensor = torch.Tensor(Y_test).unsqueeze(1)
+
+    # Create datasets/loaders
+    train_data = TensorDataset(X_train_tensor, Y_train_tensor)
+    val_data = TensorDataset(X_val_tensor, Y_val_tensor)
+    test_data = TensorDataset(X_test_tensor, Y_test_tensor)
+
+    train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True)
+    val_loader = DataLoader(val_data, batch_size=batch_size, shuffle=True)
+    test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=False)
+
+    return {
+        "train_loader": train_loader,
+        "val_loader": val_loader,
+        "test_loader": test_loader,
+        "X_train": X_train,
+        "Y_train": Y_train,
+        "X_val": X_val,
+        "Y_val": Y_val,
+        "X_test": X_test,
+        "Y_test": Y_test,
+        "indices": {
+            "train": np.arange(n_train),
+            "val": np.arange(n_train, n_train + n_val),
+            "test": np.arange(n_train + n_val, n_total),
+        },
+    }
